@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Zap, AlertTriangle, CheckCircle, ChevronRight, ChevronLeft,
@@ -38,7 +38,22 @@ export default function AnalyzerPage() {
   const [activeTab, setActiveTab] = useState('all');
   const [step, setStep] = useState(0);
   const [resultsView, setResultsView] = useState('list');
+  const [savedAnalysis, setSavedAnalysis] = useState(null);
   const resultsRef = useRef(null);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem('o9LastAnalysis');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.form && parsed?.results) {
+          setSavedAnalysis(parsed);
+        }
+      }
+    } catch (error) {
+      console.warn('Unable to load saved analysis', error);
+    }
+  }, []);
 
   const toggleIssue = (val) => {
     setForm(prev => ({
@@ -47,6 +62,16 @@ export default function AnalyzerPage() {
         ? prev.issues.filter(v => v !== val)
         : [...prev.issues, val]
     }));
+  };
+
+  const saveAnalysisSnapshot = (savedForm, savedResults) => {
+    try {
+      const payload = { form: savedForm, results: savedResults, timestamp: new Date().toISOString() };
+      window.localStorage.setItem('o9LastAnalysis', JSON.stringify(payload));
+      setSavedAnalysis(payload);
+    } catch (error) {
+      console.warn('Unable to save analysis snapshot', error);
+    }
   };
 
   const handleSubmit = () => {
@@ -63,6 +88,7 @@ export default function AnalyzerPage() {
         userCount: parseInt(form.userCount) || 0,
       });
       setResults(result);
+      saveAnalysisSnapshot(form, result);
       setAnalyzing(false);
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200);
     }, 2200);
@@ -88,7 +114,7 @@ export default function AnalyzerPage() {
     const lines = [
       `o9 Report Optimization Analysis`,
       `${'='.repeat(50)}`,
-      `Report: ${form.reportName || 'Unnamed'} (${form.reportType})`,
+      `Report: ${form.reportName || 'Unnamed'} (${form.reportType.replace(/_/g, ' ')})`,
       `Health Score: ${results.score}/100`,
       `Total Findings: ${results.totalRecommendations}`,
       `Critical: ${results.criticalCount} | High: ${results.highCount} | Medium: ${results.mediumCount} | Low: ${results.lowCount}`,
@@ -115,12 +141,44 @@ export default function AnalyzerPage() {
     URL.revokeObjectURL(url);
   };
 
+  const handleCopySummary = async () => {
+    if (!results) return;
+    const summary = [
+      `o9 Report Optimization Summary`,
+      `Report: ${form.reportName || 'Unnamed'} (${form.reportType.replace(/_/g, ' ')})`,
+      `Health Score: ${results.score}/100`,
+      `Total Findings: ${results.totalRecommendations}`,
+      `Critical: ${results.criticalCount} | High: ${results.highCount} | Medium: ${results.mediumCount} | Low: ${results.lowCount}`,
+      ``,
+      `Top recommendations to start with:`,
+      ...results.recommendations.slice(0, 3).map((r, i) => `  ${i + 1}. ${r.title} (${r.severity})`),
+    ].join('\n');
+    try {
+      await navigator.clipboard.writeText(summary);
+      alert('Summary copied to clipboard');
+    } catch (error) {
+      console.warn('Clipboard copy failed', error);
+      alert('Unable to copy summary to clipboard.');
+    }
+  };
+
+  const handleRestoreSaved = () => {
+    if (!savedAnalysis) return;
+    setForm(savedAnalysis.form);
+    setResults(savedAnalysis.results);
+    setStep(2);
+    setActiveTab('all');
+    setResultsView('list');
+    setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200);
+  };
+
   const filteredRecs = results?.recommendations?.filter(r => {
     if (activeTab === 'all') return true;
     return r.severity === activeTab;
   }) || [];
 
   const selectedType = REPORT_TYPES.find(t => t.value === form.reportType);
+  const topRecommendations = results?.recommendations?.slice(0, 3) || [];
 
   return (
     <div className="section">
@@ -133,6 +191,25 @@ export default function AnalyzerPage() {
           <h2>o9 Report Optimizer</h2>
           <p>Analyze your report configuration against 12+ optimization rules based on real-world o9 implementations.</p>
         </div>
+
+        {savedAnalysis && !results && (
+          <div className="card" style={{ marginBottom: 32, padding: '24px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--accent-blue)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+                Resume last saved analysis
+              </div>
+              <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                {savedAnalysis.form.reportName || 'Unnamed report'} — {savedAnalysis.form.reportType.replace(/_/g, ' ')}
+              </div>
+              <div style={{ color: 'var(--text-secondary)', marginTop: 8 }}>
+                Score: {savedAnalysis.results.score}/100 · {savedAnalysis.results.totalRecommendations} recommendations
+              </div>
+            </div>
+            <button className="btn btn-secondary" onClick={handleRestoreSaved}>
+              Restore Saved Analysis
+            </button>
+          </div>
+        )}
 
         {/* Stepper */}
         {!results && (
@@ -379,6 +456,9 @@ export default function AnalyzerPage() {
                   <button className="btn btn-secondary btn-sm" onClick={() => setResultsView(resultsView === 'list' ? 'compact' : 'list')}>
                     {resultsView === 'list' ? <Layers size={14} /> : <BarChart3 size={14} />}
                     {resultsView === 'list' ? 'Compact' : 'Detailed'}
+                  </button>
+                  <button className="btn btn-secondary btn-sm" onClick={handleCopySummary}>
+                    <FileText size={14} /> Copy Summary
                   </button>
                   <button className="btn btn-secondary btn-sm" onClick={handleExport}>
                     <Download size={14} /> Export

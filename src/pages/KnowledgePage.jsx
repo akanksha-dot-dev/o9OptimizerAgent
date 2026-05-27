@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Search, BookOpen, Layers, Gauge, Database, ShieldCheck, GitBranch, Wrench } from 'lucide-react';
 import { OPTIMIZATION_RULES } from '../data/optimizationRules';
+import RecommendationCard from '../components/RecommendationCard';
 
 const categoryIcons = {
   'Hierarchy & Data Model': <Layers size={20} />,
@@ -28,6 +29,7 @@ export default function KnowledgePage() {
   const [selectedCategory, setSelectedCategory] = useState('all');
 
   const categories = [...new Set(OPTIMIZATION_RULES.map(r => r.category))];
+  const categoryCounts = categories.map(cat => ({ category: cat, count: OPTIMIZATION_RULES.filter(r => r.category === cat).length }));
 
   const filtered = OPTIMIZATION_RULES.filter(rule => {
     const matchesSearch = search === '' ||
@@ -44,6 +46,16 @@ export default function KnowledgePage() {
         <div className="section-header">
           <h2>Optimization Knowledge Base</h2>
           <p>Browse all optimization rules and best practices for o9 reports.</p>
+        </div>
+
+        <div className="knowledge-summary-cards">
+          {categoryCounts.map((cat, index) => (
+            <div key={cat.category} className="stat-card" style={{ minWidth: 160 }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8 }}>{cat.category}</div>
+              <div style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--text-primary)' }}>{cat.count}</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>rules</div>
+            </div>
+          ))}
         </div>
 
         {/* Search & Filters */}
@@ -89,35 +101,11 @@ export default function KnowledgePage() {
           {filtered.map((rule, i) => (
             <motion.div
               key={rule.id}
-              className="card"
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.04, duration: 0.3 }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                <div className={`card-icon ${categoryColors[rule.category] || 'indigo'}`}>
-                  {categoryIcons[rule.category] || <BookOpen size={20} />}
-                </div>
-                <span className={`result-severity severity-${rule.severity}`}>
-                  {rule.severity}
-                </span>
-              </div>
-              <h3>{rule.title}</h3>
-              <p style={{ marginBottom: 14 }}>{rule.problem.substring(0, 120)}…</p>
-              <div style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                paddingTop: 14, borderTop: '1px solid var(--border-subtle)'
-              }}>
-                <span style={{
-                  fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase',
-                  letterSpacing: '0.5px', fontWeight: 600
-                }}>
-                  {rule.category}
-                </span>
-                <span className="impact-tag" style={{ fontSize: '0.65rem' }}>
-                  {rule.effortLevel} Effort
-                </span>
-              </div>
+              <RecommendationCard rule={rule} />
             </motion.div>
           ))}
         </div>

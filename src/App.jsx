@@ -23,6 +23,7 @@ export default function App() {
             <Route path="/templates" element={<TemplatesPage />} />
             <Route path="/knowledge" element={<KnowledgePage />} />
             <Route path="/best-practices" element={<BestPracticesPage />} />
+            <Route path="*" element={<HomePage />} />
           </Routes>
         </main>
         <footer className="footer">

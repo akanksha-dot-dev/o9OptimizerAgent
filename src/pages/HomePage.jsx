@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -48,6 +48,22 @@ const fadeUp = {
 };
 
 export default function HomePage() {
+  const [recentAnalysis, setRecentAnalysis] = useState(null);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem('o9LastAnalysis');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.form && parsed?.results) {
+          setRecentAnalysis(parsed);
+        }
+      }
+    } catch (error) {
+      console.warn('Unable to load recent analysis', error);
+    }
+  }, []);
+
   return (
     <div>
       {/* Hero */}
@@ -79,6 +95,55 @@ export default function HomePage() {
           </div>
         </motion.div>
       </section>
+
+      {recentAnalysis && (
+        <section className="section" style={{ paddingTop: 20, paddingBottom: 40, background: '#f8fbff' }}>
+          <div className="page-wrapper" style={{ maxWidth: 1040 }}>
+            <div className="card" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 18, alignItems: 'center' }}>
+              <div>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 10, fontSize: '0.78rem', fontWeight: 700, color: 'var(--accent-blue)' }}>
+                  <Sparkles size={14} /> Most recent o9 analysis
+                </div>
+                <h3 style={{ marginBottom: 10, fontSize: '1.25rem', fontWeight: 700 }}>Last Report Assessment</h3>
+                <p style={{ color: 'var(--text-secondary)', lineHeight: 1.8, marginBottom: 18 }}>
+                  Resume your last review anytime, or use the insights below to identify the next optimization opportunity.
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
+                  <div style={{ padding: '14px 16px', borderRadius: 'var(--radius-md)', background: 'white', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 6 }}>Report Type</div>
+                    <div style={{ fontWeight: 700 }}>{recentAnalysis.form.reportType.replace(/_/g, ' ')}</div>
+                  </div>
+                  <div style={{ padding: '14px 16px', borderRadius: 'var(--radius-md)', background: 'white', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 6 }}>Health Score</div>
+                    <div style={{ fontWeight: 700 }}>{recentAnalysis.results.score}/100</div>
+                  </div>
+                  <div style={{ padding: '14px 16px', borderRadius: 'var(--radius-md)', background: 'white', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 6 }}>Recommendations</div>
+                    <div style={{ fontWeight: 700 }}>{recentAnalysis.results.totalRecommendations}</div>
+                  </div>
+                  <div style={{ padding: '14px 16px', borderRadius: 'var(--radius-md)', background: 'white', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 6 }}>Critical Findings</div>
+                    <div style={{ fontWeight: 700 }}>{recentAnalysis.results.criticalCount}</div>
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ padding: '18px 20px', borderRadius: 'var(--radius-lg)', background: 'var(--accent-blue)', color: 'white' }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>Action</div>
+                  <p style={{ marginBottom: 16, lineHeight: 1.7 }}>Take the last analysis into the report analyzer and convert findings into an execution plan.</p>
+                  <Link to="/analyzer" className="btn btn-primary">
+                    Review and Improve
+                  </Link>
+                </div>
+                <div style={{ padding: '18px 20px', borderRadius: 'var(--radius-lg)', background: 'white', border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 700, letterSpacing: '0.06em', marginBottom: 10 }}>Consultant Insight</div>
+                  <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7 }}>The highest-severity findings in your last review are the best place to start for immediate operational improvement and system stability.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Features */}
       <section className="section" style={{ background: 'white' }}>

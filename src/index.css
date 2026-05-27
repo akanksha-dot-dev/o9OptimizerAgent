@@ -727,6 +727,13 @@ ul, ol { list-style: none; }
 
 .mobile-menu-btn { display: none; }
 
+.knowledge-summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
 @media (max-width: 900px) {
   .navbar-links { display: none !important; }
   .mobile-menu-btn { display: block !important; }
