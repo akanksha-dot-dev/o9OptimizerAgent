@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
-  Zap, BarChart3, BookOpen, Settings, Database, Target, Layout, Menu, X
+  Zap, BarChart3, BookOpen, Settings, Database, Target, Layout, Menu, X,
+  Sun, Moon,
 } from 'lucide-react';
 
 const navItems = [
@@ -17,9 +18,39 @@ const navItems = [
 export default function Navbar() {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  // ---------- Scroll shadow ----------
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 10);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll(); // set initial state
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // ---------- Dark mode ----------
+  const [theme, setTheme] = useState(() => {
+    try {
+      return localStorage.getItem('o9-theme') || 'light';
+    } catch {
+      return 'light';
+    }
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    try {
+      localStorage.setItem('o9-theme', theme);
+    } catch {
+      // storage unavailable
+    }
+  }, [theme]);
+
+  const toggleTheme = () =>
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
 
   return (
-    <nav className="navbar">
+    <nav className={`navbar${scrolled ? ' scrolled' : ''}`}>
       <div className="navbar-inner">
         <Link to="/" className="navbar-logo">
           <div className="logo-icon">o9</div>
@@ -41,17 +72,41 @@ export default function Navbar() {
           ))}
         </div>
 
-        {/* Mobile Toggle */}
-        <button
-          className="mobile-menu-btn"
-          onClick={() => setMobileOpen(!mobileOpen)}
-          style={{
-            display: 'none', border: 'none', background: 'none',
-            color: 'var(--text-primary)', padding: 8
-          }}
-        >
-          {mobileOpen ? <X size={22} /> : <Menu size={22} />}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {/* Theme Toggle */}
+          <button
+            className="theme-toggle"
+            onClick={toggleTheme}
+            aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 36,
+              height: 36,
+              borderRadius: 'var(--radius-sm, 8px)',
+              border: '1px solid var(--border-subtle, #e2e6ef)',
+              background: 'var(--bg-card, #fff)',
+              color: 'var(--text-secondary, #475569)',
+              cursor: 'pointer',
+              transition: 'all var(--transition-fast, 150ms)',
+            }}
+          >
+            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+
+          {/* Mobile Toggle */}
+          <button
+            className="mobile-menu-btn"
+            onClick={() => setMobileOpen(!mobileOpen)}
+            style={{
+              display: 'none', border: 'none', background: 'none',
+              color: 'var(--text-primary)', padding: 8,
+            }}
+          >
+            {mobileOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
+        </div>
       </div>
 
       {/* Mobile Menu */}

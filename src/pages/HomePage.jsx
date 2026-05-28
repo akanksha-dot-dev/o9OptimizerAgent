@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -47,6 +47,53 @@ const fadeUp = {
   })
 };
 
+function useCountUp(target, duration = 2000) {
+  const [count, setCount] = useState(0);
+  const [started, setStarted] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting && !started) { setStarted(true); }
+    }, { threshold: 0.3 });
+    if (ref.current) observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, [started]);
+
+  useEffect(() => {
+    if (!started) return;
+    let start = 0;
+    const step = target / (duration / 16);
+    const timer = setInterval(() => {
+      start += step;
+      if (start >= target) { setCount(target); clearInterval(timer); }
+      else setCount(Math.floor(start));
+    }, 16);
+    return () => clearInterval(timer);
+  }, [started, target, duration]);
+
+  return { count, ref };
+}
+
+function AnimatedStat({ target, suffix, label }) {
+  const { count, ref } = useCountUp(target);
+  return (
+    <motion.div
+      ref={ref}
+      className="stat-card"
+      initial={{ opacity: 0, scale: 0.9 }}
+      whileInView={{ opacity: 1, scale: 1 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.4 }}
+    >
+      <div className="stat-value" style={{ color: 'var(--accent-blue)' }}>
+        {count}{suffix}
+      </div>
+      <div className="stat-label">{label}</div>
+    </motion.div>
+  );
+}
+
 export default function HomePage() {
   const [recentAnalysis, setRecentAnalysis] = useState(null);
 
@@ -68,6 +115,14 @@ export default function HomePage() {
     <div>
       {/* Hero */}
       <section className="hero">
+        <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0.04, pointerEvents: 'none' }}>
+          <defs>
+            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="1" />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#grid)" />
+        </svg>
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -159,7 +214,7 @@ export default function HomePage() {
             {features.map((f, i) => (
               <Link to={f.link} key={i} style={{ textDecoration: 'none', color: 'inherit' }}>
                 <motion.div
-                  className="card"
+                  className="card glow-hover"
                   variants={fadeUp}
                   initial="hidden"
                   whileInView="visible"
@@ -180,28 +235,21 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Social Proof */}
+      <section className="section" style={{ paddingTop: 20, paddingBottom: 20, textAlign: 'center' }}>
+        <p style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>
+          Trusted by teams optimizing o9 implementations worldwide
+        </p>
+      </section>
+
       {/* Stats */}
       <section className="section" style={{ background: 'var(--bg-primary)' }}>
         <div className="page-wrapper">
           <div className="stats-bar" style={{ maxWidth: 900, margin: '0 auto' }}>
-            {[
-              { value: '12+', label: 'Optimization Rules' },
-              { value: '8', label: 'Report Templates' },
-              { value: '27', label: 'EKG Checklist Items' },
-              { value: '5', label: 'Maturity Dimensions' },
-            ].map((s, i) => (
-              <motion.div
-                key={i}
-                className="stat-card"
-                initial={{ opacity: 0, scale: 0.9 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.1, duration: 0.4 }}
-              >
-                <div className="stat-value" style={{ color: 'var(--accent-blue)' }}>{s.value}</div>
-                <div className="stat-label">{s.label}</div>
-              </motion.div>
-            ))}
+            <AnimatedStat target={12} suffix="+" label="Optimization Rules" />
+            <AnimatedStat target={8} suffix="" label="Report Templates" />
+            <AnimatedStat target={27} suffix="" label="EKG Checklist Items" />
+            <AnimatedStat target={5} suffix="" label="Maturity Dimensions" />
           </div>
         </div>
       </section>
@@ -213,6 +261,13 @@ export default function HomePage() {
           whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5 }}
+          style={{
+            borderTop: '3px solid transparent',
+            borderImage: 'linear-gradient(135deg, #3b82f6, #6366f1, #8b5cf6) 1',
+            paddingTop: 48,
+            maxWidth: 640,
+            margin: '0 auto'
+          }}
         >
           <h2 style={{ marginBottom: 14, fontSize: '1.5rem', fontWeight: 700 }}>Ready to Optimize?</h2>
           <p style={{ color: 'var(--text-secondary)', maxWidth: 480, margin: '0 auto 28px', fontSize: '0.95rem' }}>

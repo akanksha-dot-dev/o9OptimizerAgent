@@ -1,15 +1,69 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Search, CheckCircle, BarChart3, Layers, Clock } from 'lucide-react';
+import { Search, CheckCircle, BarChart3, Layers, Clock, Copy, Check } from 'lucide-react';
 import { REPORT_TEMPLATES, TEMPLATE_CATEGORIES } from '../data/reportTemplates';
 
 export default function TemplatesPage() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [copied, setCopied] = useState(false);
 
-  const filtered = selectedCategory === 'all'
-    ? REPORT_TEMPLATES
-    : REPORT_TEMPLATES.filter(t => t.category === selectedCategory);
+  const filtered = REPORT_TEMPLATES.filter(t => {
+    const matchesCat = selectedCategory === 'all' || t.category === selectedCategory;
+    const matchesSearch = searchQuery === '' ||
+      t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.description.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesCat && matchesSearch;
+  });
+
+  const getCategoryCount = (cat) => {
+    return REPORT_TEMPLATES.filter(t => {
+      const matchesCat = t.category === cat;
+      const matchesSearch = searchQuery === '' ||
+        t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        t.description.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesCat && matchesSearch;
+    }).length;
+  };
+
+  const allFilteredCount = REPORT_TEMPLATES.filter(t => {
+    return searchQuery === '' ||
+      t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.description.toLowerCase().includes(searchQuery.toLowerCase());
+  }).length;
+
+  const handleCopyConfig = () => {
+    if (!selectedTemplate) return;
+
+    const lines = [];
+    lines.push(`=== ${selectedTemplate.name} ===`);
+    lines.push(`Category: ${selectedTemplate.category}`);
+    lines.push(`Difficulty: ${selectedTemplate.difficulty}`);
+    lines.push('');
+
+    lines.push('--- Hierarchy Configuration ---');
+    Object.entries(selectedTemplate.hierarchyConfig).forEach(([key, val]) => {
+      lines.push(`  ${key}: ${val}`);
+    });
+    lines.push('');
+
+    lines.push('--- KPIs ---');
+    selectedTemplate.kpis.forEach((kpi, i) => {
+      lines.push(`  ${i + 1}. ${kpi}`);
+    });
+    lines.push('');
+
+    lines.push('--- Layout Specification ---');
+    lines.push(`  Columns: ${selectedTemplate.layoutSpec.columns}`);
+    lines.push(`  Default View: ${selectedTemplate.layoutSpec.defaultView}`);
+    lines.push(`  Charts: ${selectedTemplate.layoutSpec.chartsIncluded.join(', ')}`);
+
+    navigator.clipboard.writeText(lines.join('\n')).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
 
   return (
     <div className="section" style={{ background: 'white', minHeight: '80vh' }}>
@@ -22,13 +76,33 @@ export default function TemplatesPage() {
           </p>
         </div>
 
+        {/* Search Bar */}
+        <div style={{ maxWidth: 600, margin: '0 auto 24px', position: 'relative' }}>
+          <Search size={17} style={{
+            position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)',
+            color: 'var(--text-muted)'
+          }} />
+          <input
+            type="text"
+            placeholder="Search templates by name or description…"
+            value={searchQuery}
+            onChange={e => { setSearchQuery(e.target.value); setSelectedTemplate(null); }}
+            style={{
+              width: '100%', padding: '11px 16px 11px 42px',
+              borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)',
+              background: 'var(--bg-input)', color: 'var(--text-primary)',
+              fontFamily: 'var(--font-sans)', fontSize: '0.9rem', outline: 'none'
+            }}
+          />
+        </div>
+
         {/* Category Filter */}
         <div className="tabs" style={{ maxWidth: 800, margin: '0 auto 32px' }}>
           <button
             className={`tab-btn ${selectedCategory === 'all' ? 'active' : ''}`}
             onClick={() => { setSelectedCategory('all'); setSelectedTemplate(null); }}
           >
-            All ({REPORT_TEMPLATES.length})
+            All ({allFilteredCount})
           </button>
           {TEMPLATE_CATEGORIES.map(cat => (
             <button
@@ -36,7 +110,7 @@ export default function TemplatesPage() {
               className={`tab-btn ${selectedCategory === cat ? 'active' : ''}`}
               onClick={() => { setSelectedCategory(cat); setSelectedTemplate(null); }}
             >
-              {cat}
+              {cat} ({getCategoryCount(cat)})
             </button>
           ))}
         </div>
@@ -80,6 +154,11 @@ export default function TemplatesPage() {
                 </div>
               </motion.div>
             ))}
+            {filtered.length === 0 && (
+              <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: 48, color: 'var(--text-muted)' }}>
+                <p style={{ fontSize: '0.95rem' }}>No templates match your search.</p>
+              </div>
+            )}
           </div>
         ) : (
           /* Template Detail */
@@ -99,10 +178,25 @@ export default function TemplatesPage() {
             <div className="analyzer-form">
               <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
                 <span style={{ fontSize: '2.5rem' }}>{selectedTemplate.icon}</span>
-                <div>
+                <div style={{ flex: 1 }}>
                   <h2 style={{ fontSize: '1.4rem', fontWeight: 700 }}>{selectedTemplate.name}</h2>
                   <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{selectedTemplate.category}</p>
                 </div>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={handleCopyConfig}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    minWidth: 130, justifyContent: 'center',
+                    background: copied ? 'var(--accent-emerald-light)' : undefined,
+                    borderColor: copied ? 'var(--accent-emerald)' : undefined,
+                    color: copied ? 'var(--accent-emerald)' : undefined,
+                    transition: 'all 200ms ease'
+                  }}
+                >
+                  {copied ? <Check size={14} /> : <Copy size={14} />}
+                  {copied ? 'Copied!' : 'Copy Config'}
+                </button>
               </div>
 
               <p style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', marginBottom: 28, lineHeight: 1.7 }}>

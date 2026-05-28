@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import HomePage from './pages/HomePage';
 import AnalyzerPage from './pages/AnalyzerPage';
@@ -27,12 +27,36 @@ export default function App() {
           </Routes>
         </main>
         <footer className="footer">
-          <p>
-            o9 Report Optimizer Agent — Built with domain expertise from real-world o9 Solutions implementations.
-          </p>
-          <p style={{ marginTop: 4 }}>
-            © {new Date().getFullYear()} · Powered by AI-driven optimization intelligence
-          </p>
+          <div className="footer-inner">
+            <div className="footer-brand">
+              <h4>
+                <div style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(135deg, #3b82f6, #6366f1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.65rem', color: 'white' }}>o9</div>
+                Optimizer Agent
+              </h4>
+              <p>Enterprise-grade optimization intelligence for o9 Solutions implementations. Built with deep domain expertise from real-world deployments.</p>
+            </div>
+            <div className="footer-col">
+              <h5>Tools</h5>
+              <Link to="/analyzer">Report Analyzer</Link>
+              <Link to="/ekg-health">EKG Health</Link>
+              <Link to="/snop-advisor">S&OP Advisor</Link>
+              <Link to="/templates">Templates</Link>
+            </div>
+            <div className="footer-col">
+              <h5>Resources</h5>
+              <Link to="/knowledge">Knowledge Base</Link>
+              <Link to="/best-practices">Best Practices</Link>
+            </div>
+            <div className="footer-col">
+              <h5>About</h5>
+              <a href="#">o9 Solutions</a>
+              <a href="#">Documentation</a>
+            </div>
+          </div>
+          <div className="footer-bottom">
+            <p>© {new Date().getFullYear()} o9 Optimizer Agent — Powered by AI-driven optimization intelligence</p>
+            <span className="version-badge">v1.2.0</span>
+          </div>
         </footer>
       </div>
     </Router>
