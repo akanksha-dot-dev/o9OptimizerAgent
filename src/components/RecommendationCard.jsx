@@ -9,7 +9,7 @@ const SEVERITY_COLORS = {
   low: '#10b981',
 };
 
-export default function RecommendationCard({ rule }) {
+export default function RecommendationCard({ rule, status = 'todo', onStatusChange }) {
   const [expanded, setExpanded] = useState(false);
 
   const borderColor = SEVERITY_COLORS[rule.severity] || '#94a3b8';
@@ -25,9 +25,25 @@ export default function RecommendationCard({ rule }) {
             {rule.severity}
           </span>
           <div>
-            <h3 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-              {rule.title}
-            </h3>
+            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+              <h3 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+                {rule.title}
+              </h3>
+              {status !== 'todo' && (
+                <span style={{
+                  fontSize: '0.65rem',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  padding: '2px 8px',
+                  borderRadius: 4,
+                  background: status === 'in_progress' ? 'var(--accent-blue-light)' : 'var(--accent-emerald-light)',
+                  color: status === 'in_progress' ? 'var(--accent-blue)' : 'var(--accent-emerald)',
+                  border: `1px solid ${status === 'in_progress' ? 'rgba(59,130,246,0.2)' : 'rgba(16,185,129,0.2)'}`
+                }}>
+                  {status === 'in_progress' ? 'In Progress' : 'Completed'}
+                </span>
+              )}
+            </div>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
               {rule.category}
             </span>
@@ -91,23 +107,71 @@ export default function RecommendationCard({ rule }) {
                 ))}
               </ol>
 
-              <div style={{ display: 'flex', gap: 12, marginTop: 16, flexWrap: 'wrap' }}>
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '5px 14px', borderRadius: 999,
-                  background: '#eef2ff', border: '1px solid #c7d2fe',
-                  fontSize: '0.73rem', fontWeight: 600, color: 'var(--accent-indigo)'
-                }}>
-                  <Wrench size={12} /> Effort: {rule.effortLevel}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 16, marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border-subtle)' }}>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '5px 14px', borderRadius: 999,
+                    background: '#eef2ff', border: '1px solid #c7d2fe',
+                    fontSize: '0.73rem', fontWeight: 600, color: 'var(--accent-indigo)'
+                  }}>
+                    <Wrench size={12} /> Effort: {rule.effortLevel}
+                  </div>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '5px 14px', borderRadius: 999,
+                    background: 'var(--accent-emerald-light)', border: '1px solid #a7f3d0',
+                    fontSize: '0.73rem', fontWeight: 600, color: 'var(--accent-emerald)'
+                  }}>
+                    <TrendingUp size={12} /> {rule.impact}
+                  </div>
                 </div>
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '5px 14px', borderRadius: 999,
-                  background: 'var(--accent-emerald-light)', border: '1px solid #a7f3d0',
-                  fontSize: '0.73rem', fontWeight: 600, color: 'var(--accent-emerald)'
-                }}>
-                  <TrendingUp size={12} /> {rule.impact}
-                </div>
+
+                {onStatusChange && (
+                  <div>
+                    <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      Roadmap Status
+                    </span>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {['todo', 'in_progress', 'completed'].map(s => {
+                        const active = status === s;
+                        const label = s === 'todo' ? 'Todo' : s === 'in_progress' ? 'In Progress' : 'Completed';
+                        let activeStyle = {
+                          background: 'var(--bg-input)',
+                          color: 'var(--text-secondary)',
+                          borderColor: 'var(--border-subtle)'
+                        };
+                        if (active) {
+                          if (s === 'todo') activeStyle = { background: '#f3f4f6', color: '#374151', borderColor: '#d1d5db' };
+                          if (s === 'in_progress') activeStyle = { background: 'var(--accent-blue-light)', color: 'var(--accent-blue)', borderColor: 'var(--accent-blue)' };
+                          if (s === 'completed') activeStyle = { background: 'var(--accent-emerald-light)', color: 'var(--accent-emerald)', borderColor: 'var(--accent-emerald)' };
+                        }
+                        return (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onStatusChange(rule.id, s);
+                            }}
+                            style={{
+                              padding: '5px 12px',
+                              borderRadius: 'var(--radius-sm)',
+                              fontSize: '0.72rem',
+                              fontWeight: 600,
+                              border: '1px solid var(--border-subtle)',
+                              cursor: 'pointer',
+                              transition: 'all 150ms ease',
+                              ...activeStyle
+                            }}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </motion.div>

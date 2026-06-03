@@ -1,8 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Zap, AlertTriangle, CheckCircle, ChevronRight, ChevronLeft,
-  Download, RotateCcw, FileText, BarChart3, Layers, Settings2, ArrowRight
+  Download, RotateCcw, FileText, BarChart3, Layers, Settings2,
+  Sliders, ClipboardList, History, Columns, Trash2, CheckCircle2,
+  Play, Save, ArrowLeftRight
 } from 'lucide-react';
 import { REPORT_TYPES, ISSUE_CATEGORIES, analyzeReport } from '../data/optimizationRules';
 import ScoreRing from '../components/ScoreRing';
@@ -32,28 +34,67 @@ const defaultForm = {
 };
 
 export default function AnalyzerPage() {
+  // Wizard & Form States
   const [form, setForm] = useState(defaultForm);
   const [results, setResults] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
   const [step, setStep] = useState(0);
   const [resultsView, setResultsView] = useState('list');
-  const [savedAnalysis, setSavedAnalysis] = useState(null);
   const resultsRef = useRef(null);
 
+  // Saved Reports & Comparisons
+  const [savedReports, setSavedReports] = useState([]);
+  const [activeReportId, setActiveReportId] = useState(null);
+  const [compareReportId, setCompareReportId] = useState(null);
+  const [showHistory, setShowHistory] = useState(false);
+
+  // Sandbox Mode States
+  const [sandboxMode, setSandboxMode] = useState(false);
+  const [sandboxForm, setSandboxForm] = useState(null);
+  const [sandboxResults, setSandboxResults] = useState(null);
+
+  // Roadmap State (keyed by reportId/timestamp -> { ruleId: status })
+  const [roadmap, setRoadmap] = useState({});
+
+  // Initialize and load saved reports from localStorage
   useEffect(() => {
     try {
-      const stored = window.localStorage.getItem('o9LastAnalysis');
+      const stored = window.localStorage.getItem('o9_saved_reports');
       if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed?.form && parsed?.results) {
-          setSavedAnalysis(parsed);
+        setSavedReports(JSON.parse(stored));
+      } else {
+        // Migration from old single-report storage
+        const oldSingle = window.localStorage.getItem('o9LastAnalysis');
+        if (oldSingle) {
+          const parsed = JSON.parse(oldSingle);
+          const legacyReport = {
+            id: 'legacy_' + Date.now(),
+            name: parsed.form.reportName || 'Migrated Analysis',
+            form: parsed.form,
+            results: parsed.results,
+            roadmap: {},
+            timestamp: parsed.timestamp || new Date().toISOString()
+          };
+          const reports = [legacyReport];
+          setSavedReports(reports);
+          window.localStorage.setItem('o9_saved_reports', JSON.stringify(reports));
         }
       }
     } catch (error) {
-      console.warn('Unable to load saved analysis', error);
+      console.warn('Unable to load saved reports', error);
     }
   }, []);
+
+  // Sync saved reports to local storage on changes
+  const saveReportsList = (updatedList) => {
+    try {
+      window.localStorage.setItem('o9_saved_reports', JSON.stringify(updatedList));
+      setSavedReports(updatedList);
+    } catch (e) {
+      console.error('Failed saving reports list', e);
+    }
+  };
 
   const toggleIssue = (val) => {
     setForm(prev => ({
@@ -64,14 +105,39 @@ export default function AnalyzerPage() {
     }));
   };
 
-  const saveAnalysisSnapshot = (savedForm, savedResults) => {
-    try {
-      const payload = { form: savedForm, results: savedResults, timestamp: new Date().toISOString() };
-      window.localStorage.setItem('o9LastAnalysis', JSON.stringify(payload));
-      setSavedAnalysis(payload);
-    } catch (error) {
-      console.warn('Unable to save analysis snapshot', error);
-    }
+  const toggleSandboxIssue = (val) => {
+    setSandboxForm(prev => {
+      const updatedIssues = prev.issues.includes(val)
+        ? prev.issues.filter(v => v !== val)
+        : [...prev.issues, val];
+      const newForm = { ...prev, issues: updatedIssues };
+      const newResults = analyzeReport({
+        ...newForm,
+        rowCount: parseInt(newForm.rowCount) || 0,
+        columnCount: parseInt(newForm.columnCount) || 0,
+        kpiCount: parseInt(newForm.kpiCount) || 0,
+        hierarchyDepth: parseInt(newForm.hierarchyDepth) || 0,
+        userCount: parseInt(newForm.userCount) || 0,
+      });
+      setSandboxResults(newResults);
+      return newForm;
+    });
+  };
+
+  const handleSandboxChange = (key, value) => {
+    setSandboxForm(prev => {
+      const newForm = { ...prev, [key]: value };
+      const newResults = analyzeReport({
+        ...newForm,
+        rowCount: parseInt(newForm.rowCount) || 0,
+        columnCount: parseInt(newForm.columnCount) || 0,
+        kpiCount: parseInt(newForm.kpiCount) || 0,
+        hierarchyDepth: parseInt(newForm.hierarchyDepth) || 0,
+        userCount: parseInt(newForm.userCount) || 0,
+      });
+      setSandboxResults(newResults);
+      return newForm;
+    });
   };
 
   const handleSubmit = () => {
@@ -87,8 +153,23 @@ export default function AnalyzerPage() {
         dataAge: form.dataAge,
         userCount: parseInt(form.userCount) || 0,
       });
+
+      const reportId = 'report_' + Date.now();
+      const newReport = {
+        id: reportId,
+        name: form.reportName || `Analysis (${form.reportType.replace(/_/g, ' ')})`,
+        form: { ...form },
+        results: result,
+        roadmap: {},
+        timestamp: new Date().toISOString()
+      };
+
+      const updatedList = [newReport, ...savedReports];
+      saveReportsList(updatedList);
+      setActiveReportId(reportId);
       setResults(result);
-      saveAnalysisSnapshot(form, result);
+      setRoadmap({});
+      setSandboxMode(false);
       setAnalyzing(false);
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200);
     }, 2200);
@@ -97,6 +178,10 @@ export default function AnalyzerPage() {
   const handleReset = () => {
     setForm(defaultForm);
     setResults(null);
+    setActiveReportId(null);
+    setCompareReportId(null);
+    setRoadmap({});
+    setSandboxMode(false);
     setActiveTab('all');
     setStep(0);
     setResultsView('list');
@@ -109,20 +194,39 @@ export default function AnalyzerPage() {
     return true;
   };
 
+  const handleStatusChange = (ruleId, nextStatus) => {
+    if (!activeReportId) return;
+    const updated = savedReports.map(r => {
+      if (r.id === activeReportId) {
+        const nextRoadmap = { ...r.roadmap, [ruleId]: nextStatus };
+        setRoadmap(nextRoadmap);
+        return { ...r, roadmap: nextRoadmap };
+      }
+      return r;
+    });
+    saveReportsList(updated);
+  };
+
   const handleExport = () => {
-    if (!results) return;
+    const activeResults = sandboxMode ? sandboxResults : results;
+    const activeForm = sandboxMode ? sandboxForm : form;
+    if (!activeResults) return;
+
     const lines = [
-      `o9 Report Optimization Analysis`,
+      `o9 Report Optimization Analysis (Status: ${sandboxMode ? 'SIMULATED' : 'BASELINE'})`,
       `${'='.repeat(50)}`,
-      `Report: ${form.reportName || 'Unnamed'} (${form.reportType.replace(/_/g, ' ')})`,
-      `Health Score: ${results.score}/100`,
-      `Total Findings: ${results.totalRecommendations}`,
-      `Critical: ${results.criticalCount} | High: ${results.highCount} | Medium: ${results.mediumCount} | Low: ${results.lowCount}`,
+      `Report: ${activeForm.reportName || 'Unnamed'} (${activeForm.reportType.replace(/_/g, ' ')})`,
+      `Health Score: ${activeResults.score}/100`,
+      `Total Findings: ${activeResults.totalRecommendations}`,
+      `Critical: ${activeResults.criticalCount} | High: ${activeResults.highCount} | Medium: ${activeResults.mediumCount} | Low: ${activeResults.lowCount}`,
+      ``,
+      `ROADMAP STATUSES:`,
+      ...activeResults.recommendations.map(r => `  - ${r.title}: ${roadmap[r.id] || 'todo'}`),
       ``,
       `RECOMMENDATIONS`,
       `${'─'.repeat(50)}`,
     ];
-    results.recommendations.forEach((r, i) => {
+    activeResults.recommendations.forEach((r, i) => {
       lines.push(`\n${i + 1}. [${r.severity.toUpperCase()}] ${r.title}`);
       lines.push(`   Category: ${r.category}`);
       lines.push(`   Problem: ${r.problem}`);
@@ -142,16 +246,21 @@ export default function AnalyzerPage() {
   };
 
   const handleCopySummary = async () => {
-    if (!results) return;
+    const activeResults = sandboxMode ? sandboxResults : results;
+    const activeForm = sandboxMode ? sandboxForm : form;
+    if (!activeResults) return;
+
     const summary = [
-      `o9 Report Optimization Summary`,
-      `Report: ${form.reportName || 'Unnamed'} (${form.reportType.replace(/_/g, ' ')})`,
-      `Health Score: ${results.score}/100`,
-      `Total Findings: ${results.totalRecommendations}`,
-      `Critical: ${results.criticalCount} | High: ${results.highCount} | Medium: ${results.mediumCount} | Low: ${results.lowCount}`,
+      `o9 Report Optimization Summary (${sandboxMode ? 'Simulated Sandbox' : 'Baseline Analysis'})`,
+      `Report: ${activeForm.reportName || 'Unnamed'} (${activeForm.reportType.replace(/_/g, ' ')})`,
+      `Health Score: ${activeResults.score}/100`,
+      `Total Findings: ${activeResults.totalRecommendations}`,
+      `Critical: ${activeResults.criticalCount} | High: ${activeResults.highCount} | Medium: ${activeResults.mediumCount} | Low: ${activeResults.lowCount}`,
+      ``,
+      `Roadmap Progress: ${completedCount}/${activeResults.totalRecommendations} Action Items Completed`,
       ``,
       `Top recommendations to start with:`,
-      ...results.recommendations.slice(0, 3).map((r, i) => `  ${i + 1}. ${r.title} (${r.severity})`),
+      ...activeResults.recommendations.slice(0, 3).map((r, i) => `  ${i + 1}. ${r.title} (${r.severity})`),
     ].join('\n');
     try {
       await navigator.clipboard.writeText(summary);
@@ -162,27 +271,226 @@ export default function AnalyzerPage() {
     }
   };
 
-  const handleRestoreSaved = () => {
-    if (!savedAnalysis) return;
-    setForm(savedAnalysis.form);
-    setResults(savedAnalysis.results);
-    setStep(2);
-    setActiveTab('all');
-    setResultsView('list');
+  const handleLoadReport = (report) => {
+    setForm(report.form);
+    setResults(report.results);
+    setActiveReportId(report.id);
+    setRoadmap(report.roadmap || {});
+    setSandboxMode(false);
+    setCompareReportId(null);
+    setShowHistory(false);
     setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200);
   };
 
-  const filteredRecs = results?.recommendations?.filter(r => {
+  const handleDeleteReport = (reportId, event) => {
+    event.stopPropagation();
+    const filtered = savedReports.filter(r => r.id !== reportId);
+    saveReportsList(filtered);
+    if (activeReportId === reportId) {
+      handleReset();
+    }
+  };
+
+  const handleApplySandboxConfig = () => {
+    if (!activeReportId) return;
+    const updated = savedReports.map(r => {
+      if (r.id === activeReportId) {
+        return {
+          ...r,
+          form: { ...sandboxForm },
+          results: { ...sandboxResults }
+        };
+      }
+      return r;
+    });
+    setForm(sandboxForm);
+    setResults(sandboxResults);
+    saveReportsList(updated);
+    setSandboxMode(false);
+    alert('Simulated configuration locked-in as baseline.');
+  };
+
+  const startSandbox = () => {
+    setSandboxForm({ ...form });
+    setSandboxResults({ ...results });
+    setSandboxMode(true);
+  };
+
+  // Computed Values
+  const activeResults = sandboxMode ? sandboxResults : results;
+  const filteredRecs = activeResults?.recommendations?.filter(r => {
     if (activeTab === 'all') return true;
     return r.severity === activeTab;
   }) || [];
 
-  const selectedType = REPORT_TYPES.find(t => t.value === form.reportType);
-  const topRecommendations = results?.recommendations?.slice(0, 3) || [];
+  const completedCount = useMemo(() => {
+    if (!activeResults) return 0;
+    return activeResults.recommendations.filter(r => roadmap[r.id] === 'completed').length;
+  }, [activeResults, roadmap]);
+
+  const progressPercent = useMemo(() => {
+    if (!activeResults || activeResults.totalRecommendations === 0) return 0;
+    return Math.round((completedCount / activeResults.totalRecommendations) * 100);
+  }, [activeResults, completedCount]);
+
+  const compareReport = useMemo(() => {
+    return savedReports.find(r => r.id === compareReportId);
+  }, [compareReportId, savedReports]);
 
   return (
     <div className="section">
-      <div className="analyzer-container">
+      <div className="analyzer-container" style={{ position: 'relative' }}>
+        
+        {/* Toggle Saved Reports History Panel Button */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+          <button 
+            className="btn btn-secondary btn-sm"
+            onClick={() => setShowHistory(!showHistory)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            <History size={15} />
+            {showHistory ? 'Hide Saved History' : `History & Benchmarks (${savedReports.length})`}
+          </button>
+        </div>
+
+        {/* History & Benchmarks Drawer */}
+        <AnimatePresence>
+          {showHistory && (
+            <motion.div 
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="card"
+              style={{ marginBottom: 28, padding: 24, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}
+            >
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                <History size={18} color="var(--accent-blue)" /> Analysis History & Benchmark Comparison
+              </h3>
+              {savedReports.length === 0 ? (
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', padding: '12px 0' }}>
+                  No saved reports found. Complete an analysis to start building history.
+                </p>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: 20 }}>
+                  <div style={{ maxHeight: 250, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, paddingRight: 8 }}>
+                    {savedReports.map((report) => (
+                      <div
+                        key={report.id}
+                        onClick={() => handleLoadReport(report)}
+                        style={{
+                          padding: '10px 14px',
+                          borderRadius: 'var(--radius-sm)',
+                          background: activeReportId === report.id ? 'var(--accent-blue-light)' : 'var(--bg-card)',
+                          border: `1px solid ${activeReportId === report.id ? 'var(--accent-blue)' : 'var(--border-subtle)'}`,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          transition: 'all 200ms ease'
+                        }}
+                      >
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {report.name}
+                          </div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                            Score: {report.results.score}/100 · {new Date(report.timestamp).toLocaleDateString()}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {activeReportId !== report.id && (
+                            <button
+                              title="Compare with Active"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setCompareReportId(compareReportId === report.id ? null : report.id);
+                              }}
+                              style={{
+                                background: compareReportId === report.id ? 'var(--accent-indigo)' : 'var(--bg-input)',
+                                color: compareReportId === report.id ? 'white' : 'var(--text-secondary)',
+                                border: '1px solid var(--border-subtle)',
+                                borderRadius: 4, padding: '4px 6px', fontSize: '0.68rem', cursor: 'pointer'
+                              }}
+                            >
+                              <ArrowLeftRight size={12} />
+                            </button>
+                          )}
+                          <button
+                            onClick={(e) => handleDeleteReport(report.id, e)}
+                            style={{
+                              background: 'transparent', border: 'none', color: 'var(--text-muted)',
+                              cursor: 'pointer', hover: { color: '#ef4444' }
+                            }}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Benchmark / Comparison Preview */}
+                  <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: 16, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    {compareReportId && compareReport && activeReportId ? (
+                      <div>
+                        <h4 style={{ fontSize: '0.82rem', color: 'var(--accent-blue)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <ArrowLeftRight size={13} /> Side-by-Side Comparison
+                        </h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, fontSize: '0.8rem', borderBottom: '1px solid var(--border-subtle)', paddingBottom: 8, marginBottom: 8, fontWeight: 700 }}>
+                          <span>Metric</span>
+                          <span>Active (Current)</span>
+                          <span>Compared ({compareReport.name.slice(0, 10)}...)</span>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: '0.78rem' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr' }}>
+                            <span style={{ fontWeight: 600 }}>Health Score</span>
+                            <span style={{ color: results.score >= 70 ? 'var(--accent-emerald)' : '#f59e0b', fontWeight: 700 }}>{results.score}/100</span>
+                            <span style={{ color: compareReport.results.score >= 70 ? 'var(--accent-emerald)' : '#f59e0b' }}>{compareReport.results.score}/100</span>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr' }}>
+                            <span style={{ fontWeight: 600 }}>Total Findings</span>
+                            <span>{results.totalRecommendations}</span>
+                            <span>{compareReport.results.totalRecommendations}</span>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr' }}>
+                            <span style={{ fontWeight: 600 }}>Row Count</span>
+                            <span>{form.rowCount || 'N/A'}</span>
+                            <span>{compareReport.form.rowCount || 'N/A'}</span>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr' }}>
+                            <span style={{ fontWeight: 600 }}>KPI Count</span>
+                            <span>{form.kpiCount || 'N/A'}</span>
+                            <span>{compareReport.form.kpiCount || 'N/A'}</span>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr' }}>
+                            <span style={{ fontWeight: 600 }}>Hierarchy Depth</span>
+                            <span>{form.hierarchyDepth || 'N/A'}</span>
+                            <span>{compareReport.form.hierarchyDepth || 'N/A'}</span>
+                          </div>
+                        </div>
+                        <button 
+                          className="btn btn-secondary btn-sm" 
+                          onClick={() => setCompareReportId(null)}
+                          style={{ width: '100%', marginTop: 14, padding: '5px 0', fontSize: '0.75rem' }}
+                        >
+                          Clear Comparison
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 12 }}>
+                        <ArrowLeftRight size={24} style={{ marginBottom: 8, opacity: 0.5 }} />
+                        <p style={{ fontSize: '0.8rem' }}>
+                          Select the <ArrowLeftRight size={10} /> icon next to a report in your history to display a benchmark comparison.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Header */}
         <div className="section-header">
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 18px', borderRadius: 999, background: 'var(--accent-blue-light)', border: '1px solid rgba(59,130,246,0.2)', fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent-blue)', marginBottom: 16, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
@@ -191,25 +499,6 @@ export default function AnalyzerPage() {
           <h2>o9 Report Optimizer</h2>
           <p>Analyze your report configuration against 12+ optimization rules based on real-world o9 implementations.</p>
         </div>
-
-        {savedAnalysis && !results && (
-          <div className="card" style={{ marginBottom: 32, padding: '24px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-            <div>
-              <div style={{ fontSize: '0.78rem', color: 'var(--accent-blue)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
-                Resume last saved analysis
-              </div>
-              <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                {savedAnalysis.form.reportName || 'Unnamed report'} — {savedAnalysis.form.reportType.replace(/_/g, ' ')}
-              </div>
-              <div style={{ color: 'var(--text-secondary)', marginTop: 8 }}>
-                Score: {savedAnalysis.results.score}/100 · {savedAnalysis.results.totalRecommendations} recommendations
-              </div>
-            </div>
-            <button className="btn btn-secondary" onClick={handleRestoreSaved}>
-              Restore Saved Analysis
-            </button>
-          </div>
-        )}
 
         {/* Stepper */}
         {!results && (
@@ -396,40 +685,209 @@ export default function AnalyzerPage() {
           </motion.div>
         )}
 
-        {/* Results */}
+        {/* Results Section */}
         <AnimatePresence>
           {results && !analyzing && (
             <motion.div ref={resultsRef} initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.6 }}>
+              
+              {/* Sandbox Banner Mode */}
+              {sandboxMode && (
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(245,158,11,0.15) 0%, rgba(217,119,6,0.1) 100%)',
+                  border: '1.5px dashed #d97706', borderRadius: 'var(--radius-lg)',
+                  padding: '16px 24px', marginBottom: 28, display: 'flex',
+                  alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16
+                }}>
+                  <div>
+                    <h3 style={{ fontSize: '0.92rem', color: '#d97706', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Sliders size={16} /> Sandbox Simulator Active
+                    </h3>
+                    <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: 4, maxWidth: 550 }}>
+                      You are tweaking active report parameters in real-time. The results and health metrics below reflect your changes. Use the action items to secure performance gains.
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="btn btn-secondary btn-sm" onClick={() => setSandboxMode(false)}>
+                      Exit Sandbox
+                    </button>
+                    <button className="btn btn-primary btn-sm" style={{ background: '#d97706', borderColor: '#b45309' }} onClick={handleApplySandboxConfig}>
+                      <Save size={14} /> Lock-in Baseline
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Roadmap Tracker & Action Progress */}
+              <div className="card" style={{ padding: 24, marginBottom: 28, border: '1px solid var(--border-subtle)' }}>
+                <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <ClipboardList size={16} color="var(--accent-blue)" /> Optimization Roadmap Progress
+                </h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 200 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                      <span>Progress Percentage</span>
+                      <span>{progressPercent}% ({completedCount}/{activeResults.totalRecommendations} tasks)</span>
+                    </div>
+                    <div style={{ height: 10, background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', borderRadius: 999, overflow: 'hidden' }}>
+                      <motion.div 
+                        initial={{ width: 0 }}
+                        animate={{ width: `${progressPercent}%` }}
+                        style={{ height: '100%', background: 'linear-gradient(90deg, var(--accent-emerald) 0%, #10b981 100%)' }}
+                      />
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    <div style={{ textAlign: 'center', padding: '6px 16px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                      <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                        {activeResults.totalRecommendations - completedCount}
+                      </div>
+                      <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Pending</div>
+                    </div>
+                    <div style={{ textAlign: 'center', padding: '6px 16px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                      <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--accent-emerald)' }}>
+                        {completedCount}
+                      </div>
+                      <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Done</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
               {/* Executive Summary */}
-              <ExecutiveSummary results={results} form={form} />
+              <ExecutiveSummary results={activeResults} form={sandboxMode ? sandboxForm : form} />
 
               {/* Stats Row */}
               <div className="stats-bar" style={{ gridTemplateColumns: 'auto repeat(3, 1fr)' }}>
                 <div className="stat-card">
-                  <ScoreRing score={results.score} size={140} />
+                  <ScoreRing score={activeResults.score} size={140} />
                 </div>
                 <div className="stat-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                  <div className="stat-value" style={{ color: 'var(--accent-indigo)' }}>{results.totalRecommendations}</div>
+                  <div className="stat-value" style={{ color: 'var(--accent-indigo)' }}>{activeResults.totalRecommendations}</div>
                   <div className="stat-label">Total Recommendations</div>
                 </div>
                 <div className="stat-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                  <div className="stat-value" style={{ color: '#ef4444' }}>{results.criticalCount}</div>
+                  <div className="stat-value" style={{ color: '#ef4444' }}>{activeResults.criticalCount}</div>
                   <div className="stat-label">Critical Issues</div>
                 </div>
                 <div className="stat-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                  <div className="stat-value" style={{ color: 'var(--accent-rose)' }}>{results.highCount}</div>
+                  <div className="stat-value" style={{ color: 'var(--accent-rose)' }}>{activeResults.highCount}</div>
                   <div className="stat-label">High Priority</div>
                 </div>
               </div>
 
-              {/* Insights Grid: Benchmark + Donut + Priority Matrix */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 28 }}>
-                <BenchmarkPanel form={form} />
-                <PriorityMatrix recommendations={results.recommendations} />
+              {/* Sandbox Tweak Panel: Sliders & Checkboxes */}
+              <div className="card" style={{ padding: 24, marginBottom: 28, background: sandboxMode ? 'var(--bg-glass)' : 'var(--bg-secondary)', border: sandboxMode ? '1.5px solid #d97706' : '1px solid var(--border-subtle)', transition: 'all 300ms ease' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <h4 style={{ fontSize: '0.88rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
+                    <Sliders size={16} color={sandboxMode ? '#d97706' : 'var(--accent-blue)'} /> Live Optimizer Sandbox & Parameter Simulator
+                  </h4>
+                  {!sandboxMode && (
+                    <button className="btn btn-secondary btn-sm" onClick={startSandbox} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Play size={12} /> Launch Sandbox Mode
+                    </button>
+                  )}
+                </div>
+
+                {sandboxMode && sandboxForm ? (
+                  <div>
+                    {/* Sandbox Input Sliders */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 20 }}>
+                      <div>
+                        <label style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                          <span>Row Count</span>
+                          <span style={{ fontFamily: 'var(--font-mono)' }}>{(parseInt(sandboxForm.rowCount) || 0).toLocaleString()}</span>
+                        </label>
+                        <input 
+                          type="range" min="100" max="250000" step="500" 
+                          value={sandboxForm.rowCount || 0}
+                          onChange={(e) => handleSandboxChange('rowCount', e.target.value)}
+                          style={{ width: '100%', accentColor: '#d97706' }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                          <span>KPI Count</span>
+                          <span style={{ fontFamily: 'var(--font-mono)' }}>{sandboxForm.kpiCount || 0}</span>
+                        </label>
+                        <input 
+                          type="range" min="1" max="40" step="1" 
+                          value={sandboxForm.kpiCount || 0}
+                          onChange={(e) => handleSandboxChange('kpiCount', e.target.value)}
+                          style={{ width: '100%', accentColor: '#d97706' }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                          <span>Column Count</span>
+                          <span style={{ fontFamily: 'var(--font-mono)' }}>{sandboxForm.columnCount || 0}</span>
+                        </label>
+                        <input 
+                          type="range" min="1" max="100" step="1" 
+                          value={sandboxForm.columnCount || 0}
+                          onChange={(e) => handleSandboxChange('columnCount', e.target.value)}
+                          style={{ width: '100%', accentColor: '#d97706' }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                          <span>Hierarchy Depth</span>
+                          <span style={{ fontFamily: 'var(--font-mono)' }}>{sandboxForm.hierarchyDepth || 0}</span>
+                        </label>
+                        <input 
+                          type="range" min="1" max="12" step="1" 
+                          value={sandboxForm.hierarchyDepth || 0}
+                          onChange={(e) => handleSandboxChange('hierarchyDepth', e.target.value)}
+                          style={{ width: '100%', accentColor: '#d97706' }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Sandbox Checkboxes */}
+                    <div style={{ marginBottom: 12 }}>
+                      <span style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                        Observed Issues:
+                      </span>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                        {ISSUE_CATEGORIES.map(cat => {
+                          const active = sandboxForm.issues.includes(cat.value);
+                          return (
+                            <button
+                              key={cat.value}
+                              type="button"
+                              onClick={() => toggleSandboxIssue(cat.value)}
+                              style={{
+                                padding: '5px 12px',
+                                borderRadius: 999,
+                                fontSize: '0.73rem',
+                                border: '1px solid var(--border-subtle)',
+                                background: active ? 'var(--accent-blue-light)' : 'var(--bg-input)',
+                                color: active ? 'var(--accent-blue-dark)' : 'var(--text-secondary)',
+                                fontWeight: active ? 600 : 500,
+                                cursor: 'pointer',
+                                transition: 'all 150ms ease'
+                              }}
+                            >
+                              {active ? '✓ ' : ''}{cat.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: 0 }}>
+                    Click "Launch Sandbox Mode" to open interactive metric sliders, customize configuration limits, and simulate the exact score benefits of resolving data volumes, hierarchies, and metrics.
+                  </p>
+                )}
               </div>
 
-              {/* Category Breakdown */}
+              {/* Insights Grid: Benchmark + Donut + Priority Matrix */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 28 }}>
+                <BenchmarkPanel form={sandboxMode ? sandboxForm : form} />
+                <PriorityMatrix recommendations={activeResults.recommendations} />
+              </div>
+
+              {/* Category Breakdown Donut */}
               <div style={{
                 background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
                 borderRadius: 'var(--radius-lg)', padding: 28, marginBottom: 28,
@@ -438,7 +896,7 @@ export default function AnalyzerPage() {
                 <h4 style={{ fontSize: '0.88rem', fontWeight: 700, marginBottom: 16, color: 'var(--text-primary)' }}>
                   📊 Category Breakdown
                 </h4>
-                <CategoryDonut categories={results.categories} />
+                <CategoryDonut categories={activeResults.categories} />
               </div>
 
               {/* Action Bar: Tabs + View Toggle + Export */}
@@ -447,8 +905,8 @@ export default function AnalyzerPage() {
                   {['all', 'critical', 'high', 'medium', 'low'].map(tab => (
                     <button key={tab} className={`tab-btn ${activeTab === tab ? 'active' : ''}`}
                       onClick={() => setActiveTab(tab)}>
-                      {tab === 'all' ? `All (${results.totalRecommendations})` :
-                        `${tab.charAt(0).toUpperCase() + tab.slice(1)} (${results[tab + 'Count']})`}
+                      {tab === 'all' ? `All (${activeResults.totalRecommendations})` :
+                        `${tab.charAt(0).toUpperCase() + tab.slice(1)} (${activeResults[tab + 'Count']})`}
                     </button>
                   ))}
                 </div>
@@ -469,14 +927,18 @@ export default function AnalyzerPage() {
                 </div>
               </div>
 
-              {/* Recommendations */}
+              {/* Recommendations List */}
               <div className="results-section">
                 {filteredRecs.length > 0 ? (
                   resultsView === 'list' ? (
                     filteredRecs.map((rule, i) => (
                       <motion.div key={rule.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.3, delay: i * 0.06 }}>
-                        <RecommendationCard rule={rule} />
+                        <RecommendationCard 
+                          rule={rule} 
+                          status={roadmap[rule.id] || 'todo'}
+                          onStatusChange={handleStatusChange}
+                        />
                       </motion.div>
                     ))
                   ) : (
