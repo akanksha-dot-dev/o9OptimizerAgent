@@ -13,6 +13,7 @@ import CategoryDonut from '../components/CategoryDonut';
 import BenchmarkPanel from '../components/BenchmarkPanel';
 import PriorityMatrix from '../components/PriorityMatrix';
 import ExecutiveSummary from '../components/ExecutiveSummary';
+import QueryProfiler from '../components/QueryProfiler';
 
 const STEPS = [
   { id: 0, label: 'Report Type', icon: <FileText size={16} /> },
@@ -34,6 +35,7 @@ const defaultForm = {
 };
 
 export default function AnalyzerPage() {
+  const [activeToolTab, setActiveToolTab] = useState('analyzer');
   // Wizard & Form States
   const [form, setForm] = useState(defaultForm);
   const [results, setResults] = useState(null);
@@ -341,156 +343,6 @@ export default function AnalyzerPage() {
     <div className="section">
       <div className="analyzer-container" style={{ position: 'relative' }}>
         
-        {/* Toggle Saved Reports History Panel Button */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-          <button 
-            className="btn btn-secondary btn-sm"
-            onClick={() => setShowHistory(!showHistory)}
-            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-          >
-            <History size={15} />
-            {showHistory ? 'Hide Saved History' : `History & Benchmarks (${savedReports.length})`}
-          </button>
-        </div>
-
-        {/* History & Benchmarks Drawer */}
-        <AnimatePresence>
-          {showHistory && (
-            <motion.div 
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="card"
-              style={{ marginBottom: 28, padding: 24, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}
-            >
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                <History size={18} color="var(--accent-blue)" /> Analysis History & Benchmark Comparison
-              </h3>
-              {savedReports.length === 0 ? (
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', padding: '12px 0' }}>
-                  No saved reports found. Complete an analysis to start building history.
-                </p>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: 20 }}>
-                  <div style={{ maxHeight: 250, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, paddingRight: 8 }}>
-                    {savedReports.map((report) => (
-                      <div
-                        key={report.id}
-                        onClick={() => handleLoadReport(report)}
-                        style={{
-                          padding: '10px 14px',
-                          borderRadius: 'var(--radius-sm)',
-                          background: activeReportId === report.id ? 'var(--accent-blue-light)' : 'var(--bg-card)',
-                          border: `1px solid ${activeReportId === report.id ? 'var(--accent-blue)' : 'var(--border-subtle)'}`,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          transition: 'all 200ms ease'
-                        }}
-                      >
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {report.name}
-                          </div>
-                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
-                            Score: {report.results.score}/100 · {new Date(report.timestamp).toLocaleDateString()}
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          {activeReportId !== report.id && (
-                            <button
-                              title="Compare with Active"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setCompareReportId(compareReportId === report.id ? null : report.id);
-                              }}
-                              style={{
-                                background: compareReportId === report.id ? 'var(--accent-indigo)' : 'var(--bg-input)',
-                                color: compareReportId === report.id ? 'white' : 'var(--text-secondary)',
-                                border: '1px solid var(--border-subtle)',
-                                borderRadius: 4, padding: '4px 6px', fontSize: '0.68rem', cursor: 'pointer'
-                              }}
-                            >
-                              <ArrowLeftRight size={12} />
-                            </button>
-                          )}
-                          <button
-                            onClick={(e) => handleDeleteReport(report.id, e)}
-                            style={{
-                              background: 'transparent', border: 'none', color: 'var(--text-muted)',
-                              cursor: 'pointer', hover: { color: '#ef4444' }
-                            }}
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Benchmark / Comparison Preview */}
-                  <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: 16, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                    {compareReportId && compareReport && activeReportId ? (
-                      <div>
-                        <h4 style={{ fontSize: '0.82rem', color: 'var(--accent-blue)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <ArrowLeftRight size={13} /> Side-by-Side Comparison
-                        </h4>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, fontSize: '0.8rem', borderBottom: '1px solid var(--border-subtle)', paddingBottom: 8, marginBottom: 8, fontWeight: 700 }}>
-                          <span>Metric</span>
-                          <span>Active (Current)</span>
-                          <span>Compared ({compareReport.name.slice(0, 10)}...)</span>
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: '0.78rem' }}>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr' }}>
-                            <span style={{ fontWeight: 600 }}>Health Score</span>
-                            <span style={{ color: results.score >= 70 ? 'var(--accent-emerald)' : '#f59e0b', fontWeight: 700 }}>{results.score}/100</span>
-                            <span style={{ color: compareReport.results.score >= 70 ? 'var(--accent-emerald)' : '#f59e0b' }}>{compareReport.results.score}/100</span>
-                          </div>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr' }}>
-                            <span style={{ fontWeight: 600 }}>Total Findings</span>
-                            <span>{results.totalRecommendations}</span>
-                            <span>{compareReport.results.totalRecommendations}</span>
-                          </div>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr' }}>
-                            <span style={{ fontWeight: 600 }}>Row Count</span>
-                            <span>{form.rowCount || 'N/A'}</span>
-                            <span>{compareReport.form.rowCount || 'N/A'}</span>
-                          </div>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr' }}>
-                            <span style={{ fontWeight: 600 }}>KPI Count</span>
-                            <span>{form.kpiCount || 'N/A'}</span>
-                            <span>{compareReport.form.kpiCount || 'N/A'}</span>
-                          </div>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr' }}>
-                            <span style={{ fontWeight: 600 }}>Hierarchy Depth</span>
-                            <span>{form.hierarchyDepth || 'N/A'}</span>
-                            <span>{compareReport.form.hierarchyDepth || 'N/A'}</span>
-                          </div>
-                        </div>
-                        <button 
-                          className="btn btn-secondary btn-sm" 
-                          onClick={() => setCompareReportId(null)}
-                          style={{ width: '100%', marginTop: 14, padding: '5px 0', fontSize: '0.75rem' }}
-                        >
-                          Clear Comparison
-                        </button>
-                      </div>
-                    ) : (
-                      <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 12 }}>
-                        <ArrowLeftRight size={24} style={{ marginBottom: 8, opacity: 0.5 }} />
-                        <p style={{ fontSize: '0.8rem' }}>
-                          Select the <ArrowLeftRight size={10} /> icon next to a report in your history to display a benchmark comparison.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
         {/* Header */}
         <div className="section-header">
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 18px', borderRadius: 999, background: 'var(--accent-blue-light)', border: '1px solid rgba(59,130,246,0.2)', fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent-blue)', marginBottom: 16, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
@@ -500,8 +352,178 @@ export default function AnalyzerPage() {
           <p>Analyze your report configuration against 12+ optimization rules based on real-world o9 implementations.</p>
         </div>
 
+        {/* Tool Selector Tabs */}
+        <div className="tabs" style={{ maxWidth: 500, margin: '0 auto 32px', display: 'flex', justifyContent: 'center' }}>
+          <button
+            className={`tab-btn ${activeToolTab === 'analyzer' ? 'active' : ''}`}
+            onClick={() => setActiveToolTab('analyzer')}
+            style={{ flex: 1, padding: '12px 0', fontSize: '0.88rem' }}
+          >
+            Report Configuration Analyzer
+          </button>
+          <button
+            className={`tab-btn ${activeToolTab === 'profiler' ? 'active' : ''}`}
+            onClick={() => setActiveToolTab('profiler')}
+            style={{ flex: 1, padding: '12px 0', fontSize: '0.88rem' }}
+          >
+            o9 Script Query Profiler
+          </button>
+        </div>
+
+        {activeToolTab === 'analyzer' ? (
+          <>
+            {/* Toggle Saved Reports History Panel Button */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+              <button 
+                className="btn btn-secondary btn-sm"
+                onClick={() => setShowHistory(!showHistory)}
+                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                <History size={15} />
+                {showHistory ? 'Hide Saved History' : `History & Benchmarks (${savedReports.length})`}
+              </button>
+            </div>
+
+            {/* History & Benchmarks Drawer */}
+            <AnimatePresence>
+              {showHistory && (
+                <motion.div 
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="card"
+                  style={{ marginBottom: 28, padding: 24, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}
+                >
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                    <History size={18} color="var(--accent-blue)" /> Analysis History & Benchmark Comparison
+                  </h3>
+                  {savedReports.length === 0 ? (
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', padding: '12px 0' }}>
+                      No saved reports found. Complete an analysis to start building history.
+                    </p>
+                  ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: 20 }}>
+                      <div style={{ maxHeight: 250, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, paddingRight: 8 }}>
+                        {savedReports.map((report) => (
+                          <div
+                            key={report.id}
+                            onClick={() => handleLoadReport(report)}
+                            style={{
+                              padding: '10px 14px',
+                              borderRadius: 'var(--radius-sm)',
+                              background: activeReportId === report.id ? 'var(--accent-blue-light)' : 'var(--bg-card)',
+                              border: `1px solid ${activeReportId === report.id ? 'var(--accent-blue)' : 'var(--border-subtle)'}`,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              transition: 'all 200ms ease'
+                            }}
+                          >
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {report.name}
+                              </div>
+                              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                                Score: {report.results.score}/100 · {new Date(report.timestamp).toLocaleDateString()}
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              {activeReportId !== report.id && (
+                                <button
+                                  title="Compare with Active"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setCompareReportId(compareReportId === report.id ? null : report.id);
+                                  }}
+                                  style={{
+                                    background: compareReportId === report.id ? 'var(--accent-indigo)' : 'var(--bg-input)',
+                                    color: compareReportId === report.id ? 'white' : 'var(--text-secondary)',
+                                    border: '1px solid var(--border-subtle)',
+                                    borderRadius: 4, padding: '4px 6px', fontSize: '0.68rem', cursor: 'pointer'
+                                  }}
+                                >
+                                  <ArrowLeftRight size={12} />
+                                </button>
+                              )}
+                              <button
+                                onClick={(e) => handleDeleteReport(report.id, e)}
+                                style={{
+                                  background: 'transparent', border: 'none', color: 'var(--text-muted)',
+                                  cursor: 'pointer', hover: { color: '#ef4444' }
+                                }}
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Benchmark / Comparison Preview */}
+                      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: 16, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                        {compareReportId && compareReport && activeReportId ? (
+                          <div>
+                            <h4 style={{ fontSize: '0.82rem', color: 'var(--accent-blue)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <ArrowLeftRight size={13} /> Side-by-Side Comparison
+                            </h4>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, fontSize: '0.8rem', borderBottom: '1px solid var(--border-subtle)', paddingBottom: 8, marginBottom: 8, fontWeight: 700 }}>
+                              <span>Metric</span>
+                              <span>Active (Current)</span>
+                              <span>Compared ({compareReport.name.slice(0, 10)}...)</span>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: '0.78rem' }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr' }}>
+                                <span style={{ fontWeight: 600 }}>Health Score</span>
+                                <span style={{ color: results.score >= 70 ? 'var(--accent-emerald)' : '#f59e0b', fontWeight: 700 }}>{results.score}/100</span>
+                                <span style={{ color: compareReport.results.score >= 70 ? 'var(--accent-emerald)' : '#f59e0b' }}>{compareReport.results.score}/100</span>
+                              </div>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr' }}>
+                                <span style={{ fontWeight: 600 }}>Total Findings</span>
+                                <span>{results.totalRecommendations}</span>
+                                <span>{compareReport.results.totalRecommendations}</span>
+                              </div>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr' }}>
+                                <span style={{ fontWeight: 600 }}>Row Count</span>
+                                <span>{form.rowCount || 'N/A'}</span>
+                                <span>{compareReport.form.rowCount || 'N/A'}</span>
+                              </div>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr' }}>
+                                <span style={{ fontWeight: 600 }}>KPI Count</span>
+                                <span>{form.kpiCount || 'N/A'}</span>
+                                <span>{compareReport.form.kpiCount || 'N/A'}</span>
+                              </div>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr' }}>
+                                <span style={{ fontWeight: 600 }}>Hierarchy Depth</span>
+                                <span>{form.hierarchyDepth || 'N/A'}</span>
+                                <span>{compareReport.form.hierarchyDepth || 'N/A'}</span>
+                              </div>
+                            </div>
+                            <button 
+                              className="btn btn-secondary btn-sm" 
+                              onClick={() => setCompareReportId(null)}
+                              style={{ width: '100%', marginTop: 14, padding: '5px 0', fontSize: '0.75rem' }}
+                            >
+                              Clear Comparison
+                            </button>
+                          </div>
+                        ) : (
+                          <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 12 }}>
+                            <ArrowLeftRight size={24} style={{ marginBottom: 8, opacity: 0.5 }} />
+                            <p style={{ fontSize: '0.8rem' }}>
+                              Select the <ArrowLeftRight size={10} /> icon next to a report in your history to display a benchmark comparison.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
         {/* Stepper */}
-        {!results && (
+        {!results && activeToolTab === 'analyzer' && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0, marginBottom: 36 }}>
             {STEPS.map((s, i) => (
               <React.Fragment key={s.id}>
@@ -977,7 +999,11 @@ export default function AnalyzerPage() {
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
-    </div>
+      </>
+    ) : (
+      <QueryProfiler />
+    )}
+  </div>
+</div>
   );
 }

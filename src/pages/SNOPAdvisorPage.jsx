@@ -3,11 +3,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, CheckCircle, Target, Download } from 'lucide-react';
 import { PROCESS_DIMENSIONS, MATURITY_LEVELS, assessMaturity } from '../data/snopMaturityData';
 import RadarChart from '../components/RadarChart';
+import SNOPTimeline from '../components/SNOPTimeline';
 
 export default function SNOPAdvisorPage() {
   const [answers, setAnswers] = useState({});
   const [results, setResults] = useState(null);
   const [currentDim, setCurrentDim] = useState(0);
+  const [roadmapView, setRoadmapView] = useState('timeline');
 
   const handleAnswer = (qId, value) => {
     setAnswers(prev => ({ ...prev, [qId]: value }));
@@ -260,36 +262,62 @@ export default function SNOPAdvisorPage() {
               {/* Improvement Roadmap */}
               {results.recommendations.length > 0 && (
                 <div style={{ marginTop: 32 }}>
-                  <h3 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: 20 }}>
-                    🗺️ Improvement Roadmap
-                  </h3>
-                  <div className="results-section">
-                    {results.recommendations.map((rec, i) => (
-                      <div key={i} className="result-card" style={{ padding: '20px 24px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-                          <span className={`result-severity severity-${rec.priority}`}>{rec.priority}</span>
-                          <h4 style={{ fontSize: '0.95rem', fontWeight: 600 }}>{rec.dimension}</h4>
-                          <div style={{
-                            display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto',
-                            fontSize: '0.78rem', fontWeight: 600, color: 'var(--accent-blue)'
-                          }}>
-                            L{rec.currentLevel} → L{rec.targetLevel}
-                          </div>
-                        </div>
-                        <ul style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingLeft: 0, listStyle: 'none' }}>
-                          {rec.actions.map((action, j) => (
-                            <li key={j} style={{
-                              display: 'flex', alignItems: 'flex-start', gap: 10,
-                              fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.6
-                            }}>
-                              <CheckCircle size={15} style={{ color: 'var(--accent-emerald)', flexShrink: 0, marginTop: 3 }} />
-                              {action}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>
+                      🗺️ Improvement Roadmap
+                    </h3>
+                    <div className="tabs" style={{ marginBottom: 0, padding: 2, background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)' }}>
+                      <button
+                        className={`tab-btn ${roadmapView === 'timeline' ? 'active' : ''}`}
+                        onClick={() => setRoadmapView('timeline')}
+                        style={{ padding: '6px 14px', fontSize: '0.75rem' }}
+                      >
+                        Roadmap Timeline
+                      </button>
+                      <button
+                        className={`tab-btn ${roadmapView === 'list' ? 'active' : ''}`}
+                        onClick={() => setRoadmapView('list')}
+                        style={{ padding: '6px 14px', fontSize: '0.75rem' }}
+                      >
+                        Detailed Action List
+                      </button>
+                    </div>
                   </div>
+
+                  {roadmapView === 'timeline' ? (
+                    <SNOPTimeline 
+                      recommendations={results.recommendations} 
+                      baselineScore={results.overallScore} 
+                    />
+                  ) : (
+                    <div className="results-section">
+                      {results.recommendations.map((rec, i) => (
+                        <div key={i} className="result-card" style={{ padding: '20px 24px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                            <span className={`result-severity severity-${rec.priority}`}>{rec.priority}</span>
+                            <h4 style={{ fontSize: '0.95rem', fontWeight: 600 }}>{rec.dimension}</h4>
+                            <div style={{
+                              display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto',
+                              fontSize: '0.78rem', fontWeight: 600, color: 'var(--accent-blue)'
+                            }}>
+                              L{rec.currentLevel} → L{rec.targetLevel}
+                            </div>
+                          </div>
+                          <ul style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingLeft: 0, listStyle: 'none' }}>
+                            {rec.actions.map((action, j) => (
+                              <li key={j} style={{
+                                display: 'flex', alignItems: 'flex-start', gap: 10,
+                                fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.6
+                              }}>
+                                <CheckCircle size={15} style={{ color: 'var(--accent-emerald)', flexShrink: 0, marginTop: 3 }} />
+                                {action}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 

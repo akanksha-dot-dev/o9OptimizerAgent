@@ -1056,3 +1056,219 @@ ul, ol { list-style: none; }
 @media (max-width: 640px) {
   .stats-bar { grid-template-columns: 1fr !important; }
 }
+
+/* ===== o9 Query Profiler & Diff Styles ===== */
+.profiler-code-panel {
+  background: #181825;
+  border-radius: var(--radius-md);
+  padding: 16px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: #cdd6f4;
+  border: 1px solid var(--border-subtle);
+}
+
+.profiler-code-line {
+  display: flex;
+  margin-bottom: 2px;
+}
+
+.profiler-line-num {
+  width: 30px;
+  color: var(--text-muted);
+  text-align: right;
+  padding-right: 12px;
+  user-select: none;
+}
+
+.profiler-line-content {
+  flex: 1;
+}
+
+.diff-line-removed {
+  background: rgba(244, 63, 94, 0.15);
+  border-left: 3px solid var(--accent-rose);
+  color: var(--accent-rose);
+  padding-left: 4px;
+}
+
+.diff-line-added {
+  background: rgba(16, 185, 129, 0.15);
+  border-left: 3px solid var(--accent-emerald);
+  color: var(--accent-emerald);
+  padding-left: 4px;
+}
+
+.diff-panel-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 8px;
+  color: var(--text-secondary);
+}
+
+/* ===== Diagnostic Terminal Console Styles ===== */
+.terminal-window {
+  background: #0f141c;
+  color: #a5b4fc;
+  border: 1px solid #2d3148;
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+}
+
+.terminal-header {
+  background: #171d27;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid #2d3148;
+}
+
+.terminal-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.terminal-dot.red { background: #f87171; }
+.terminal-dot.yellow { background: #fbbf24; }
+.terminal-dot.green { background: #34d399; }
+
+.terminal-body {
+  padding: 16px;
+  height: 200px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.terminal-line {
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.terminal-line.info { color: #818cf8; }
+.terminal-line.success { color: #34d399; }
+.terminal-line.warn { color: #fbbf24; }
+.terminal-line.error { color: #f87171; }
+
+/* ===== EKG Graph Visualizer Styles ===== */
+.ekg-graph-svg {
+  width: 100%;
+  border-radius: var(--radius-lg);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  overflow: visible;
+}
+
+.graph-node {
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), filter 0.2s;
+  cursor: pointer;
+}
+
+.graph-node:hover {
+  transform: scale(1.1);
+  filter: drop-shadow(0 0 8px var(--accent-blue));
+}
+
+.graph-edge {
+  stroke: var(--text-muted);
+  stroke-dasharray: 2, 2;
+  animation: edgeFlow 30s linear infinite;
+}
+
+@keyframes edgeFlow {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: 200; }
+}
+
+.graph-node-circle {
+  stroke-width: 2;
+  transition: fill 0.3s, stroke 0.3s;
+}
+
+.graph-node-text {
+  font-size: 8px;
+  font-weight: 700;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ===== S&OP Roadmap Timeline Styles ===== */
+.sop-timeline-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  position: relative;
+  margin-top: 24px;
+}
+
+.sop-timeline-grid::before {
+  content: '';
+  position: absolute;
+  left: 20px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--border-subtle);
+  z-index: 0;
+}
+
+.sop-milestone-card {
+  display: flex;
+  gap: 16px;
+  z-index: 1;
+}
+
+.sop-milestone-indicator {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  background: var(--bg-card);
+  border: 2px solid var(--border-subtle);
+  color: var(--text-muted);
+  flex-shrink: 0;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.3s ease;
+}
+
+.sop-milestone-card.active .sop-milestone-indicator {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+  background: var(--accent-blue-light);
+  box-shadow: 0 0 12px rgba(59,130,246,0.3);
+}
+
+.sop-milestone-card.completed .sop-milestone-indicator {
+  border-color: var(--accent-emerald);
+  color: white;
+  background: var(--accent-emerald);
+  box-shadow: 0 0 12px rgba(16,185,129,0.3);
+}
+
+.sop-milestone-content {
+  flex: 1;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.3s ease;
+}
+
+.sop-milestone-card.active .sop-milestone-content {
+  border-color: var(--border-accent);
+}
+
