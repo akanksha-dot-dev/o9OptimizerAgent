@@ -123,6 +123,50 @@ export default function AnalyzerPage() {
   const resultsRef = useRef(null);
   // Extension bridge state
   const [extensionSource, setExtensionSource] = useState(null);
+  const [extensionToastVisible, setExtensionToastVisible] = useState(false);
+
+  // ── Extension Bridge: listen for data from the browser extension ───────────
+  useEffect(() => {
+    function handleExtensionMessage(event) {
+      // Validate the message is from our extension
+      if (!isValidExtensionMessage(event)) return;
+
+      try {
+        const payload = event.data.payload;
+        const normalizedForm = normalizeExtensionPayload(payload);
+
+        // Populate form with extracted data
+        setForm(prev => ({ ...prev, ...normalizedForm }));
+
+        // Store source metadata for the banner
+        setExtensionSource({
+          tenantHost: payload.tenantHost,
+          workspace: payload.workspace,
+          confidence: payload.confidence,
+          scanMode: payload.scanMode,
+          apiResponseCount: payload.apiResponseCount || 0,
+          capturedAt: payload.capturedAt,
+        });
+
+        // Show extension toast
+        setExtensionToastVisible(true);
+        setTimeout(() => setExtensionToastVisible(false), 5000);
+
+        // Reset wizard to step 0 so user reviews and can click "Run Analysis"
+        setResults(null);
+        setStep(0);
+        setAnalyzing(false);
+        setSandboxMode(false);
+
+        console.log('[o9 Optimizer] Extension data received ✅', payload);
+      } catch (err) {
+        console.error('[o9 Optimizer] Failed to process extension data:', err);
+      }
+    }
+
+    window.addEventListener('message', handleExtensionMessage);
+    return () => window.removeEventListener('message', handleExtensionMessage);
+  }, []);
 
   // Saved Reports & Comparisons
   const [savedReports, setSavedReports] = useState([]);
