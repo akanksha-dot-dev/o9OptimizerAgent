@@ -591,6 +591,37 @@ export default function AnalyzerPage() {
 
         {activeToolTab === 'analyzer' ? (
           <>
+            {/* Extension Connected Banner */}
+            <AnimatePresence>
+              {extensionSource && (
+                <ExtensionBanner
+                  source={extensionSource}
+                  onDismiss={() => setExtensionSource(null)}
+                />
+              )}
+            </AnimatePresence>
+
+            {/* Extension Data Toast */}
+            <AnimatePresence>
+              {extensionToastVisible && (
+                <motion.div
+                  initial={{ opacity: 0, y: 40, scale: 0.9 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 40, scale: 0.9 }}
+                  style={{
+                    position: 'fixed', bottom: 32, left: '50%', transform: 'translateX(-50%)',
+                    background: 'linear-gradient(135deg, #10b981, #059669)',
+                    color: 'white', padding: '12px 24px', borderRadius: 999,
+                    fontWeight: 700, fontSize: '0.88rem', zIndex: 9999,
+                    boxShadow: '0 8px 32px rgba(16,185,129,0.4)',
+                    display: 'flex', alignItems: 'center', gap: 10, whiteSpace: 'nowrap',
+                  }}
+                >
+                  <Plug size={16} /> o9 Extension data received — form auto-populated!
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* Toggle Saved Reports History Panel Button */}
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
               <button 
