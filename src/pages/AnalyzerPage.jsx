@@ -125,20 +125,21 @@ export default function AnalyzerPage() {
   const [extensionSource, setExtensionSource] = useState(null);
   const [extensionToastVisible, setExtensionToastVisible] = useState(false);
 
-  // ── Extension Bridge: listen for data from the browser extension ───────────
+  // ── Extension Bridge: 3-channel receiver ──────────────────────────────────
+  // Channel 1: window.postMessage (from background relay in MAIN world)
+  // Channel 2: window CustomEvent 'o9ExtensionReady' (fired directly in MAIN world)
+  // Channel 3: Poll window.__o9ExtensionConfig (set by background relay as fallback)
   useEffect(() => {
-    function handleExtensionMessage(event) {
-      // Validate the message is from our extension
-      if (!isValidExtensionMessage(event)) return;
+    let processed = false; // prevent double processing
+
+    function processExtensionPayload(payload) {
+      if (processed) return;
+      if (!payload || payload.source !== 'o9-optimizer-extension') return;
+      processed = true;
 
       try {
-        const payload = event.data.payload;
         const normalizedForm = normalizeExtensionPayload(payload);
-
-        // Populate form with extracted data
         setForm(prev => ({ ...prev, ...normalizedForm }));
-
-        // Store source metadata for the banner
         setExtensionSource({
           tenantHost: payload.tenantHost,
           workspace: payload.workspace,
@@ -147,26 +148,62 @@ export default function AnalyzerPage() {
           apiResponseCount: payload.apiResponseCount || 0,
           capturedAt: payload.capturedAt,
         });
-
-        // Show extension toast
         setExtensionToastVisible(true);
         setTimeout(() => setExtensionToastVisible(false), 5000);
-
-        // Reset wizard to step 0 so user reviews and can click "Run Analysis"
         setResults(null);
         setStep(0);
         setAnalyzing(false);
-        setSandboxMode(false);
-
-        console.log('[o9 Optimizer] Extension data received ✅', payload);
+        // Clear global so it doesn't re-fire
+        if (window.__o9ExtensionConfig) window.__o9ExtensionConfig = null;
+        console.log('[o9 Optimizer] ✅ Extension data applied:', payload.reportName || payload.tenantHost);
       } catch (err) {
         console.error('[o9 Optimizer] Failed to process extension data:', err);
       }
     }
 
-    window.addEventListener('message', handleExtensionMessage);
-    return () => window.removeEventListener('message', handleExtensionMessage);
+    // Channel 1: postMessage
+    function handlePostMessage(event) {
+      if (
+        event.data &&
+        event.data.type === 'O9_EXTENSION_BRIDGE' &&
+        event.data.source === 'o9-optimizer-extension' &&
+        event.data.payload
+      ) {
+        processExtensionPayload(event.data.payload);
+      }
+    }
+    window.addEventListener('message', handlePostMessage);
+
+    // Channel 2: CustomEvent (fired by background relay in MAIN world)
+    function handleCustomEvent(e) {
+      if (e.detail) processExtensionPayload(e.detail);
+    }
+    window.addEventListener('o9ExtensionReady', handleCustomEvent);
+
+    // Channel 3: Poll window.__o9ExtensionConfig (set by background relay)
+    // Only poll if URL has ?source=extension
+    let pollInterval = null;
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('source') === 'extension') {
+      let pollCount = 0;
+      pollInterval = setInterval(() => {
+        pollCount++;
+        if (window.__o9ExtensionConfig) {
+          processExtensionPayload(window.__o9ExtensionConfig);
+          clearInterval(pollInterval);
+        } else if (pollCount > 40) { // stop after 8 seconds
+          clearInterval(pollInterval);
+        }
+      }, 200);
+    }
+
+    return () => {
+      window.removeEventListener('message', handlePostMessage);
+      window.removeEventListener('o9ExtensionReady', handleCustomEvent);
+      if (pollInterval) clearInterval(pollInterval);
+    };
   }, []);
+
 
   // Saved Reports & Comparisons
   const [savedReports, setSavedReports] = useState([]);
