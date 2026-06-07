@@ -1,12 +1,14 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Zap, AlertTriangle, CheckCircle, ChevronRight, ChevronLeft,
   Download, RotateCcw, FileText, BarChart3, Layers, Settings2,
   Sliders, ClipboardList, History, Columns, Trash2, CheckCircle2,
-  Play, Save, ArrowLeftRight, Gauge, Shield, Activity, TrendingUp, TrendingDown
+  Play, Save, ArrowLeftRight, Gauge, Shield, Activity, TrendingUp, TrendingDown,
+  Plug, Wifi, WifiOff
 } from 'lucide-react';
 import { REPORT_TYPES, ISSUE_CATEGORIES, POSITIVE_FACTORS, NEGATIVE_FACTORS, analyzeReport } from '../data/optimizationRules';
+import { normalizeExtensionPayload, isValidExtensionMessage } from '../data/extensionBridge';
 import ScoreRing from '../components/ScoreRing';
 import RecommendationCard from '../components/RecommendationCard';
 import CategoryDonut from '../components/CategoryDonut';
@@ -16,6 +18,72 @@ import ExecutiveSummary from '../components/ExecutiveSummary';
 import QueryProfiler from '../components/QueryProfiler';
 import PerformanceMetrics from '../components/PerformanceMetrics';
 import UIOptimizationScorecard from '../components/UIOptimizationScorecard';
+
+// ─── Extension Banner Component ───────────────────────────────────────────────
+function ExtensionBanner({ source, onDismiss }) {
+  if (!source) return null;
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      style={{
+        background: 'linear-gradient(135deg, rgba(16,185,129,0.1) 0%, rgba(59,130,246,0.08) 100%)',
+        border: '1.5px solid rgba(16,185,129,0.3)',
+        borderRadius: 'var(--radius-lg)',
+        padding: '14px 20px',
+        marginBottom: 24,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: 12,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{
+          width: 34, height: 34, borderRadius: 8,
+          background: 'linear-gradient(135deg, #10b981, #059669)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        }}>
+          <Plug size={16} color="white" />
+        </div>
+        <div>
+          <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#10b981', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Wifi size={13} /> o9 Extension Connected
+          </div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 2 }}>
+            Report config auto-captured from <strong>{source.tenantHost}</strong>
+            {source.workspace ? ` · Workspace: ${source.workspace}` : ''}
+            {source.confidence ? ` · ${source.confidence}% confidence` : ''}
+            {source.scanMode ? ` · ${source.scanMode} scan` : ''}
+          </div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        {source.apiResponseCount > 0 && (
+          <span style={{
+            fontSize: '0.7rem', fontWeight: 700, padding: '3px 10px',
+            borderRadius: 999, background: 'rgba(16,185,129,0.12)',
+            border: '1px solid rgba(16,185,129,0.25)', color: '#10b981',
+          }}>
+            {source.apiResponseCount} API responses captured
+          </span>
+        )}
+        <button
+          onClick={onDismiss}
+          style={{
+            background: 'transparent', border: '1px solid rgba(16,185,129,0.2)',
+            borderRadius: 6, padding: '4px 10px', fontSize: '0.72rem',
+            color: '#10b981', cursor: 'pointer', fontWeight: 600,
+          }}
+        >
+          Dismiss
+        </button>
+      </div>
+    </motion.div>
+  );
+}
 
 const STEPS = [
   { id: 0, label: 'Report Type', icon: <FileText size={16} /> },
@@ -53,6 +121,8 @@ export default function AnalyzerPage() {
   const [step, setStep] = useState(0);
   const [resultsView, setResultsView] = useState('list');
   const resultsRef = useRef(null);
+  // Extension bridge state
+  const [extensionSource, setExtensionSource] = useState(null);
 
   // Saved Reports & Comparisons
   const [savedReports, setSavedReports] = useState([]);
