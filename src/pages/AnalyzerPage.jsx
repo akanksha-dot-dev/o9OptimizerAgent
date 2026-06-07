@@ -4,9 +4,9 @@ import {
   Zap, AlertTriangle, CheckCircle, ChevronRight, ChevronLeft,
   Download, RotateCcw, FileText, BarChart3, Layers, Settings2,
   Sliders, ClipboardList, History, Columns, Trash2, CheckCircle2,
-  Play, Save, ArrowLeftRight
+  Play, Save, ArrowLeftRight, Gauge, Shield, Activity, TrendingUp, TrendingDown
 } from 'lucide-react';
-import { REPORT_TYPES, ISSUE_CATEGORIES, analyzeReport } from '../data/optimizationRules';
+import { REPORT_TYPES, ISSUE_CATEGORIES, POSITIVE_FACTORS, NEGATIVE_FACTORS, analyzeReport } from '../data/optimizationRules';
 import ScoreRing from '../components/ScoreRing';
 import RecommendationCard from '../components/RecommendationCard';
 import CategoryDonut from '../components/CategoryDonut';
@@ -14,11 +14,14 @@ import BenchmarkPanel from '../components/BenchmarkPanel';
 import PriorityMatrix from '../components/PriorityMatrix';
 import ExecutiveSummary from '../components/ExecutiveSummary';
 import QueryProfiler from '../components/QueryProfiler';
+import PerformanceMetrics from '../components/PerformanceMetrics';
+import UIOptimizationScorecard from '../components/UIOptimizationScorecard';
 
 const STEPS = [
   { id: 0, label: 'Report Type', icon: <FileText size={16} /> },
-  { id: 1, label: 'Configuration', icon: <Settings2 size={16} /> },
-  { id: 2, label: 'Issues', icon: <AlertTriangle size={16} /> },
+  { id: 1, label: 'UI Parameters', icon: <Gauge size={16} /> },
+  { id: 2, label: 'Configuration', icon: <Settings2 size={16} /> },
+  { id: 3, label: 'Issues', icon: <AlertTriangle size={16} /> },
 ];
 
 const defaultForm = {
@@ -32,6 +35,12 @@ const defaultForm = {
   dataAge: '',
   userCount: '',
   description: '',
+  // New UI Performance fields
+  graphCubeTime: '',
+  webApiTime: '',
+  maxIntersection: '',
+  positiveFactors: [],
+  negativeFactors: [],
 };
 
 export default function AnalyzerPage() {
@@ -107,6 +116,24 @@ export default function AnalyzerPage() {
     }));
   };
 
+  const togglePositiveFactor = (val) => {
+    setForm(prev => ({
+      ...prev,
+      positiveFactors: prev.positiveFactors.includes(val)
+        ? prev.positiveFactors.filter(v => v !== val)
+        : [...prev.positiveFactors, val]
+    }));
+  };
+
+  const toggleNegativeFactor = (val) => {
+    setForm(prev => ({
+      ...prev,
+      negativeFactors: prev.negativeFactors.includes(val)
+        ? prev.negativeFactors.filter(v => v !== val)
+        : [...prev.negativeFactors, val]
+    }));
+  };
+
   const toggleSandboxIssue = (val) => {
     setSandboxForm(prev => {
       const updatedIssues = prev.issues.includes(val)
@@ -120,6 +147,53 @@ export default function AnalyzerPage() {
         kpiCount: parseInt(newForm.kpiCount) || 0,
         hierarchyDepth: parseInt(newForm.hierarchyDepth) || 0,
         userCount: parseInt(newForm.userCount) || 0,
+        graphCubeTime: parseInt(newForm.graphCubeTime) || 0,
+        webApiTime: parseInt(newForm.webApiTime) || 0,
+        maxIntersection: parseInt(newForm.maxIntersection) || 0,
+      });
+      setSandboxResults(newResults);
+      return newForm;
+    });
+  };
+
+  const toggleSandboxPositive = (val) => {
+    setSandboxForm(prev => {
+      const updated = prev.positiveFactors.includes(val)
+        ? prev.positiveFactors.filter(v => v !== val)
+        : [...prev.positiveFactors, val];
+      const newForm = { ...prev, positiveFactors: updated };
+      const newResults = analyzeReport({
+        ...newForm,
+        rowCount: parseInt(newForm.rowCount) || 0,
+        columnCount: parseInt(newForm.columnCount) || 0,
+        kpiCount: parseInt(newForm.kpiCount) || 0,
+        hierarchyDepth: parseInt(newForm.hierarchyDepth) || 0,
+        userCount: parseInt(newForm.userCount) || 0,
+        graphCubeTime: parseInt(newForm.graphCubeTime) || 0,
+        webApiTime: parseInt(newForm.webApiTime) || 0,
+        maxIntersection: parseInt(newForm.maxIntersection) || 0,
+      });
+      setSandboxResults(newResults);
+      return newForm;
+    });
+  };
+
+  const toggleSandboxNegative = (val) => {
+    setSandboxForm(prev => {
+      const updated = prev.negativeFactors.includes(val)
+        ? prev.negativeFactors.filter(v => v !== val)
+        : [...prev.negativeFactors, val];
+      const newForm = { ...prev, negativeFactors: updated };
+      const newResults = analyzeReport({
+        ...newForm,
+        rowCount: parseInt(newForm.rowCount) || 0,
+        columnCount: parseInt(newForm.columnCount) || 0,
+        kpiCount: parseInt(newForm.kpiCount) || 0,
+        hierarchyDepth: parseInt(newForm.hierarchyDepth) || 0,
+        userCount: parseInt(newForm.userCount) || 0,
+        graphCubeTime: parseInt(newForm.graphCubeTime) || 0,
+        webApiTime: parseInt(newForm.webApiTime) || 0,
+        maxIntersection: parseInt(newForm.maxIntersection) || 0,
       });
       setSandboxResults(newResults);
       return newForm;
@@ -136,6 +210,9 @@ export default function AnalyzerPage() {
         kpiCount: parseInt(newForm.kpiCount) || 0,
         hierarchyDepth: parseInt(newForm.hierarchyDepth) || 0,
         userCount: parseInt(newForm.userCount) || 0,
+        graphCubeTime: parseInt(newForm.graphCubeTime) || 0,
+        webApiTime: parseInt(newForm.webApiTime) || 0,
+        maxIntersection: parseInt(newForm.maxIntersection) || 0,
       });
       setSandboxResults(newResults);
       return newForm;
@@ -154,6 +231,11 @@ export default function AnalyzerPage() {
         hierarchyDepth: parseInt(form.hierarchyDepth) || 0,
         dataAge: form.dataAge,
         userCount: parseInt(form.userCount) || 0,
+        graphCubeTime: parseInt(form.graphCubeTime) || 0,
+        webApiTime: parseInt(form.webApiTime) || 0,
+        maxIntersection: parseInt(form.maxIntersection) || 0,
+        positiveFactors: form.positiveFactors,
+        negativeFactors: form.negativeFactors,
       });
 
       const reportId = 'report_' + Date.now();
@@ -191,8 +273,9 @@ export default function AnalyzerPage() {
 
   const canAdvance = () => {
     if (step === 0) return !!form.reportType;
-    if (step === 1) return true;
-    if (step === 2) return form.issues.length > 0;
+    if (step === 1) return true; // UI params are optional
+    if (step === 2) return true;
+    if (step === 3) return form.issues.length > 0;
     return true;
   };
 
@@ -216,17 +299,36 @@ export default function AnalyzerPage() {
 
     const lines = [
       `o9 Report Optimization Analysis (Status: ${sandboxMode ? 'SIMULATED' : 'BASELINE'})`,
-      `${'='.repeat(50)}`,
+      `${'='.repeat(60)}`,
       `Report: ${activeForm.reportName || 'Unnamed'} (${activeForm.reportType.replace(/_/g, ' ')})`,
-      `Health Score: ${activeResults.score}/100`,
+      `Health Score: ${activeResults.score}/100 (Base: ${activeResults.baseHealthScore}, UI Perf: ${activeResults.uiPerfScore})`,
       `Total Findings: ${activeResults.totalRecommendations}`,
       `Critical: ${activeResults.criticalCount} | High: ${activeResults.highCount} | Medium: ${activeResults.mediumCount} | Low: ${activeResults.lowCount}`,
+      ``,
+      `PERFORMANCE METRICS`,
+      `${'─'.repeat(40)}`,
+      `Graph Cube Execution Time: ${activeForm.graphCubeTime || 'N/A'} ms (${activeResults.uiPerformance?.graphCubeTier?.label || 'N/A'})`,
+      `Web API Request Processing Time: ${activeForm.webApiTime || 'N/A'} ms (${activeResults.uiPerformance?.webApiTier?.label || 'N/A'})`,
+      `Concurrent Users: ${activeForm.userCount || 'N/A'} (${activeResults.uiPerformance?.concurrentUsersTier?.label || 'N/A'})`,
+      `Max Intersection (Tenant): ${activeForm.maxIntersection || 'N/A'}`,
+      ``,
+      `UI OPTIMIZATION FACTORS`,
+      `${'─'.repeat(40)}`,
+      `Positive Factors Active: ${activeResults.uiPerformance?.activePositiveCount || 0}/${activeResults.uiPerformance?.totalPositiveCount || 0} (${activeResults.uiPerformance?.positiveAdoption || 0}% adoption)`,
+      `Negative Factors Present: ${activeResults.uiPerformance?.activeNegativeCount || 0}/${activeResults.uiPerformance?.totalNegativeCount || 0}`,
+      `Estimated Net Load Impact: ${activeResults.uiPerformance?.estLoadImpact || 0}%`,
+      ``,
+      `  Positive Factors:`,
+      ...POSITIVE_FACTORS.map(pf => `    ${(activeForm.positiveFactors || []).includes(pf.value) ? '✅' : '❌'} ${pf.label} (${pf.impact}%)`),
+      ``,
+      `  Negative Factors:`,
+      ...NEGATIVE_FACTORS.map(nf => `    ${(activeForm.negativeFactors || []).includes(nf.value) ? '⚠️' : '✅'} ${nf.label} (+${nf.impact}%)`),
       ``,
       `ROADMAP STATUSES:`,
       ...activeResults.recommendations.map(r => `  - ${r.title}: ${roadmap[r.id] || 'todo'}`),
       ``,
       `RECOMMENDATIONS`,
-      `${'─'.repeat(50)}`,
+      `${'─'.repeat(60)}`,
     ];
     activeResults.recommendations.forEach((r, i) => {
       lines.push(`\n${i + 1}. [${r.severity.toUpperCase()}] ${r.title}`);
@@ -255,9 +357,12 @@ export default function AnalyzerPage() {
     const summary = [
       `o9 Report Optimization Summary (${sandboxMode ? 'Simulated Sandbox' : 'Baseline Analysis'})`,
       `Report: ${activeForm.reportName || 'Unnamed'} (${activeForm.reportType.replace(/_/g, ' ')})`,
-      `Health Score: ${activeResults.score}/100`,
+      `Health Score: ${activeResults.score}/100 | UI Perf Score: ${activeResults.uiPerfScore}/100`,
       `Total Findings: ${activeResults.totalRecommendations}`,
       `Critical: ${activeResults.criticalCount} | High: ${activeResults.highCount} | Medium: ${activeResults.mediumCount} | Low: ${activeResults.lowCount}`,
+      ``,
+      `Performance: Graph Cube ${activeForm.graphCubeTime || 'N/A'}ms | Web API ${activeForm.webApiTime || 'N/A'}ms`,
+      `UI Optimization: ${activeResults.uiPerformance?.activePositiveCount || 0}/${activeResults.uiPerformance?.totalPositiveCount || 0} positive factors | Net load impact: ${activeResults.uiPerformance?.estLoadImpact || 0}%`,
       ``,
       `Roadmap Progress: ${completedCount}/${activeResults.totalRecommendations} Action Items Completed`,
       ``,
@@ -349,7 +454,7 @@ export default function AnalyzerPage() {
             <Zap size={13} /> AI-Powered Analysis Engine
           </div>
           <h2>o9 Report Optimizer</h2>
-          <p>Analyze your report configuration against 12+ optimization rules based on real-world o9 implementations.</p>
+          <p>Analyze your report configuration against 25+ optimization rules including UI load-time factors, performance metrics, and o9 best practices.</p>
         </div>
 
         {/* Tool Selector Tabs */}
@@ -479,6 +584,11 @@ export default function AnalyzerPage() {
                                 <span style={{ color: compareReport.results.score >= 70 ? 'var(--accent-emerald)' : '#f59e0b' }}>{compareReport.results.score}/100</span>
                               </div>
                               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr' }}>
+                                <span style={{ fontWeight: 600 }}>UI Perf Score</span>
+                                <span style={{ fontWeight: 700 }}>{results.uiPerfScore || 'N/A'}</span>
+                                <span>{compareReport.results.uiPerfScore || 'N/A'}</span>
+                              </div>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr' }}>
                                 <span style={{ fontWeight: 600 }}>Total Findings</span>
                                 <span>{results.totalRecommendations}</span>
                                 <span>{compareReport.results.totalRecommendations}</span>
@@ -489,14 +599,14 @@ export default function AnalyzerPage() {
                                 <span>{compareReport.form.rowCount || 'N/A'}</span>
                               </div>
                               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr' }}>
-                                <span style={{ fontWeight: 600 }}>KPI Count</span>
-                                <span>{form.kpiCount || 'N/A'}</span>
-                                <span>{compareReport.form.kpiCount || 'N/A'}</span>
+                                <span style={{ fontWeight: 600 }}>Graph Cube Time</span>
+                                <span>{form.graphCubeTime ? `${form.graphCubeTime}ms` : 'N/A'}</span>
+                                <span>{compareReport.form.graphCubeTime ? `${compareReport.form.graphCubeTime}ms` : 'N/A'}</span>
                               </div>
                               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr' }}>
-                                <span style={{ fontWeight: 600 }}>Hierarchy Depth</span>
-                                <span>{form.hierarchyDepth || 'N/A'}</span>
-                                <span>{compareReport.form.hierarchyDepth || 'N/A'}</span>
+                                <span style={{ fontWeight: 600 }}>Positive Factors</span>
+                                <span>{(form.positiveFactors || []).length}/{POSITIVE_FACTORS.length}</span>
+                                <span>{(compareReport.form.positiveFactors || []).length}/{POSITIVE_FACTORS.length}</span>
                               </div>
                             </div>
                             <button 
@@ -524,26 +634,26 @@ export default function AnalyzerPage() {
 
         {/* Stepper */}
         {!results && activeToolTab === 'analyzer' && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0, marginBottom: 36 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0, marginBottom: 36, flexWrap: 'wrap' }}>
             {STEPS.map((s, i) => (
               <React.Fragment key={s.id}>
                 <div
                   onClick={() => { if (s.id < step) setStep(s.id); }}
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px',
+                    display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px',
                     borderRadius: 999, cursor: s.id <= step ? 'pointer' : 'default',
                     background: step === s.id ? 'var(--gradient-primary)' : step > s.id ? 'var(--accent-emerald-light)' : 'var(--bg-input)',
                     color: step === s.id ? 'white' : step > s.id ? 'var(--accent-emerald)' : 'var(--text-muted)',
-                    fontWeight: 600, fontSize: '0.82rem',
+                    fontWeight: 600, fontSize: '0.78rem',
                     border: step === s.id ? 'none' : '1px solid var(--border-subtle)',
                     transition: 'all 0.3s ease'
                   }}
                 >
                   {step > s.id ? <CheckCircle size={15} /> : s.icon}
-                  {s.label}
+                  <span className="step-label-text">{s.label}</span>
                 </div>
                 {i < STEPS.length - 1 && (
-                  <div style={{ width: 40, height: 2, background: step > i ? 'var(--accent-emerald)' : 'var(--border-subtle)', transition: 'background 0.3s ease' }} />
+                  <div style={{ width: 28, height: 2, background: step > i ? 'var(--accent-emerald)' : 'var(--border-subtle)', transition: 'background 0.3s ease' }} />
                 )}
               </React.Fragment>
             ))}
@@ -586,9 +696,174 @@ export default function AnalyzerPage() {
                 </motion.div>
               )}
 
-              {/* Step 1: Configuration */}
+              {/* Step 1: UI Performance Parameters (NEW) */}
               {step === 1 && (
                 <motion.div key="step1" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} transition={{ duration: 0.3 }}>
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Gauge size={18} color="var(--accent-blue)" /> UI Performance Parameters
+                  </h3>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: 24 }}>
+                    Configure performance metrics and UI load-time factors. These directly impact the optimization analysis and UI Performance Score.
+                  </p>
+
+                  {/* Performance Metrics */}
+                  <div style={{
+                    padding: '20px', borderRadius: 'var(--radius-lg)',
+                    background: 'linear-gradient(135deg, rgba(99,102,241,0.04), rgba(59,130,246,0.04))',
+                    border: '1px solid rgba(99,102,241,0.12)',
+                    marginBottom: 24,
+                  }}>
+                    <h4 style={{ fontSize: '0.88rem', fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 6, color: '#6366f1' }}>
+                      <Activity size={15} /> Performance Metrics
+                    </h4>
+                    <div className="form-grid">
+                      <div className="form-group">
+                        <label>Graph Cube Execution Time (ms)</label>
+                        <input type="number" placeholder="e.g., 1200" value={form.graphCubeTime}
+                          onChange={e => setForm({ ...form, graphCubeTime: e.target.value })} />
+                        <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
+                          Thresholds: ≤500ms Excellent · ≤1500ms Good · ≤3000ms Fair · &gt;3000ms Critical
+                        </span>
+                      </div>
+                      <div className="form-group">
+                        <label>Web API Request Processing Time (ms)</label>
+                        <input type="number" placeholder="e.g., 2500" value={form.webApiTime}
+                          onChange={e => setForm({ ...form, webApiTime: e.target.value })} />
+                        <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
+                          Thresholds: ≤1000ms Excellent · ≤3000ms Good · ≤5000ms Fair · &gt;5000ms Critical
+                        </span>
+                      </div>
+                      <div className="form-group">
+                        <label>Max Intersection (Tenant Setting)</label>
+                        <input type="number" placeholder="e.g., 50000" value={form.maxIntersection}
+                          onChange={e => setForm({ ...form, maxIntersection: e.target.value })} />
+                        <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
+                          Lower values improve load time. Target: 10K-50K for optimal performance.
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Positive Factors */}
+                  <div style={{
+                    padding: '20px', borderRadius: 'var(--radius-lg)',
+                    background: 'rgba(16,185,129,0.03)',
+                    border: '1px solid rgba(16,185,129,0.12)',
+                    marginBottom: 16,
+                  }}>
+                    <h4 style={{ fontSize: '0.88rem', fontWeight: 700, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6, color: '#059669' }}>
+                      <TrendingDown size={15} /> Positive Factors — Reduce Load Time
+                    </h4>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 14 }}>
+                      Select all factors that are currently enabled in your report. Missing factors will generate optimization recommendations.
+                    </p>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 8 }}>
+                      {POSITIVE_FACTORS.map(pf => {
+                        const active = form.positiveFactors.includes(pf.value);
+                        return (
+                          <div
+                            key={pf.value}
+                            onClick={() => togglePositiveFactor(pf.value)}
+                            style={{
+                              padding: '10px 14px', borderRadius: 'var(--radius-sm)',
+                              border: active ? '1.5px solid rgba(16,185,129,0.4)' : '1px solid var(--border-subtle)',
+                              background: active ? 'rgba(16,185,129,0.08)' : 'white',
+                              cursor: 'pointer', transition: 'all 0.2s ease',
+                              display: 'flex', alignItems: 'center', gap: 8,
+                            }}
+                          >
+                            <input type="checkbox" checked={active} readOnly
+                              style={{ accentColor: '#10b981', pointerEvents: 'none' }} />
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{
+                                fontSize: '0.8rem', fontWeight: active ? 600 : 500,
+                                color: active ? '#059669' : 'var(--text-secondary)',
+                              }}>
+                                {pf.label}
+                              </div>
+                              <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: 1 }}>
+                                {pf.description}
+                              </div>
+                            </div>
+                            <span style={{
+                              fontSize: '0.68rem', fontWeight: 700, fontFamily: 'var(--font-mono)',
+                              color: active ? '#059669' : 'var(--text-muted)',
+                            }}>
+                              {pf.impact}%
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {form.positiveFactors.length > 0 && (
+                      <p style={{ fontSize: '0.75rem', color: '#059669', marginTop: 10, fontWeight: 600 }}>
+                        ✓ {form.positiveFactors.length} of {POSITIVE_FACTORS.length} positive factors active
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Negative Factors */}
+                  <div style={{
+                    padding: '20px', borderRadius: 'var(--radius-lg)',
+                    background: 'rgba(239,68,68,0.03)',
+                    border: '1px solid rgba(239,68,68,0.12)',
+                  }}>
+                    <h4 style={{ fontSize: '0.88rem', fontWeight: 700, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6, color: '#dc2626' }}>
+                      <TrendingUp size={15} /> Negative Factors — Increase Load Time
+                    </h4>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 14 }}>
+                      Select factors that are currently present in your report. Each one adds overhead and will generate optimization warnings.
+                    </p>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 8 }}>
+                      {NEGATIVE_FACTORS.map(nf => {
+                        const active = form.negativeFactors.includes(nf.value);
+                        return (
+                          <div
+                            key={nf.value}
+                            onClick={() => toggleNegativeFactor(nf.value)}
+                            style={{
+                              padding: '10px 14px', borderRadius: 'var(--radius-sm)',
+                              border: active ? '1.5px solid rgba(239,68,68,0.4)' : '1px solid var(--border-subtle)',
+                              background: active ? 'rgba(239,68,68,0.06)' : 'white',
+                              cursor: 'pointer', transition: 'all 0.2s ease',
+                              display: 'flex', alignItems: 'center', gap: 8,
+                            }}
+                          >
+                            <input type="checkbox" checked={active} readOnly
+                              style={{ accentColor: '#ef4444', pointerEvents: 'none' }} />
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{
+                                fontSize: '0.8rem', fontWeight: active ? 600 : 500,
+                                color: active ? '#dc2626' : 'var(--text-secondary)',
+                              }}>
+                                {nf.label}
+                              </div>
+                              <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: 1 }}>
+                                {nf.description}
+                              </div>
+                            </div>
+                            <span style={{
+                              fontSize: '0.68rem', fontWeight: 700, fontFamily: 'var(--font-mono)',
+                              color: active ? '#dc2626' : 'var(--text-muted)',
+                            }}>
+                              +{nf.impact}%
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {form.negativeFactors.length > 0 && (
+                      <p style={{ fontSize: '0.75rem', color: '#dc2626', marginTop: 10, fontWeight: 600 }}>
+                        ⚠ {form.negativeFactors.length} negative factor{form.negativeFactors.length > 1 ? 's' : ''} present
+                      </p>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Step 2: Configuration */}
+              {step === 2 && (
+                <motion.div key="step2" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} transition={{ duration: 0.3 }}>
                   <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: 6 }}>Report Configuration</h3>
                   <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: 24 }}>
                     Provide metrics for deeper analysis. All fields are optional but improve accuracy.
@@ -633,9 +908,9 @@ export default function AnalyzerPage() {
                 </motion.div>
               )}
 
-              {/* Step 2: Issues */}
-              {step === 2 && (
-                <motion.div key="step2" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} transition={{ duration: 0.3 }}>
+              {/* Step 3: Issues */}
+              {step === 3 && (
+                <motion.div key="step3" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} transition={{ duration: 0.3 }}>
                   <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: 6 }}>Known Issues</h3>
                   <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: 24 }}>
                     Select all issues you've observed. This drives the analysis engine's rule matching.
@@ -675,7 +950,7 @@ export default function AnalyzerPage() {
                 <button type="button" className="btn btn-secondary" onClick={handleReset} style={{ padding: '10px 22px', fontSize: '0.82rem' }}>
                   <RotateCcw size={14} /> Reset
                 </button>
-                {step < 2 ? (
+                {step < 3 ? (
                   <button className="btn btn-primary" disabled={!canAdvance()} onClick={() => setStep(step + 1)} style={{ padding: '10px 28px' }}>
                     Next <ChevronRight size={16} />
                   </button>
@@ -698,7 +973,7 @@ export default function AnalyzerPage() {
                 Analyzing Report Configuration…
               </p>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>
-                Matching against 12+ optimization rules & o9 best practices
+                Matching against 25+ optimization rules, UI factors & o9 best practices
               </p>
             </div>
             <div className="progress-bar" style={{ maxWidth: 320, margin: '8px auto 0' }}>
@@ -778,10 +1053,21 @@ export default function AnalyzerPage() {
               {/* Executive Summary */}
               <ExecutiveSummary results={activeResults} form={sandboxMode ? sandboxForm : form} />
 
+              {/* Performance Metrics (NEW) */}
+              <PerformanceMetrics results={activeResults} form={sandboxMode ? sandboxForm : form} />
+
+              {/* UI Optimization Scorecard (NEW) */}
+              <UIOptimizationScorecard results={activeResults} form={sandboxMode ? sandboxForm : form} />
+
               {/* Stats Row */}
-              <div className="stats-bar" style={{ gridTemplateColumns: 'auto repeat(3, 1fr)' }}>
+              <div className="stats-bar" style={{ gridTemplateColumns: 'auto auto repeat(3, 1fr)' }}>
                 <div className="stat-card">
-                  <ScoreRing score={activeResults.score} size={140} />
+                  <ScoreRing score={activeResults.score} size={130} />
+                  <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', textAlign: 'center', marginTop: 4 }}>Health Score</div>
+                </div>
+                <div className="stat-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                  <div className="stat-value" style={{ color: activeResults.uiPerfScore >= 60 ? '#10b981' : activeResults.uiPerfScore >= 40 ? '#f59e0b' : '#ef4444', fontSize: '2rem' }}>{activeResults.uiPerfScore}</div>
+                  <div className="stat-label">UI Perf Score</div>
                 </div>
                 <div className="stat-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                   <div className="stat-value" style={{ color: 'var(--accent-indigo)' }}>{activeResults.totalRecommendations}</div>
@@ -862,6 +1148,30 @@ export default function AnalyzerPage() {
                           style={{ width: '100%', accentColor: '#d97706' }}
                         />
                       </div>
+                      <div>
+                        <label style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                          <span>Graph Cube Time (ms)</span>
+                          <span style={{ fontFamily: 'var(--font-mono)' }}>{(parseInt(sandboxForm.graphCubeTime) || 0).toLocaleString()}</span>
+                        </label>
+                        <input 
+                          type="range" min="0" max="10000" step="100" 
+                          value={sandboxForm.graphCubeTime || 0}
+                          onChange={(e) => handleSandboxChange('graphCubeTime', e.target.value)}
+                          style={{ width: '100%', accentColor: '#d97706' }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                          <span>Web API Time (ms)</span>
+                          <span style={{ fontFamily: 'var(--font-mono)' }}>{(parseInt(sandboxForm.webApiTime) || 0).toLocaleString()}</span>
+                        </label>
+                        <input 
+                          type="range" min="0" max="15000" step="100" 
+                          value={sandboxForm.webApiTime || 0}
+                          onChange={(e) => handleSandboxChange('webApiTime', e.target.value)}
+                          style={{ width: '100%', accentColor: '#d97706' }}
+                        />
+                      </div>
                     </div>
 
                     {/* Sandbox Checkboxes */}
@@ -895,15 +1205,79 @@ export default function AnalyzerPage() {
                         })}
                       </div>
                     </div>
+
+                    {/* Sandbox Positive Factors */}
+                    <div style={{ marginBottom: 12 }}>
+                      <span style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#059669', marginBottom: 8 }}>
+                        <TrendingDown size={12} style={{ verticalAlign: -1 }} /> Positive Factors:
+                      </span>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {POSITIVE_FACTORS.map(pf => {
+                          const active = sandboxForm.positiveFactors.includes(pf.value);
+                          return (
+                            <button
+                              key={pf.value}
+                              type="button"
+                              onClick={() => toggleSandboxPositive(pf.value)}
+                              style={{
+                                padding: '4px 10px',
+                                borderRadius: 999,
+                                fontSize: '0.68rem',
+                                border: `1px solid ${active ? 'rgba(16,185,129,0.4)' : 'var(--border-subtle)'}`,
+                                background: active ? 'rgba(16,185,129,0.1)' : 'var(--bg-input)',
+                                color: active ? '#059669' : 'var(--text-secondary)',
+                                fontWeight: active ? 600 : 500,
+                                cursor: 'pointer',
+                                transition: 'all 150ms ease'
+                              }}
+                            >
+                              {active ? '✓ ' : ''}{pf.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Sandbox Negative Factors */}
+                    <div>
+                      <span style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#dc2626', marginBottom: 8 }}>
+                        <TrendingUp size={12} style={{ verticalAlign: -1 }} /> Negative Factors:
+                      </span>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {NEGATIVE_FACTORS.map(nf => {
+                          const active = sandboxForm.negativeFactors.includes(nf.value);
+                          return (
+                            <button
+                              key={nf.value}
+                              type="button"
+                              onClick={() => toggleSandboxNegative(nf.value)}
+                              style={{
+                                padding: '4px 10px',
+                                borderRadius: 999,
+                                fontSize: '0.68rem',
+                                border: `1px solid ${active ? 'rgba(239,68,68,0.4)' : 'var(--border-subtle)'}`,
+                                background: active ? 'rgba(239,68,68,0.08)' : 'var(--bg-input)',
+                                color: active ? '#dc2626' : 'var(--text-secondary)',
+                                fontWeight: active ? 600 : 500,
+                                cursor: 'pointer',
+                                transition: 'all 150ms ease'
+                              }}
+                            >
+                              {active ? '⚠ ' : ''}{nf.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: 0 }}>
-                    Click "Launch Sandbox Mode" to open interactive metric sliders, customize configuration limits, and simulate the exact score benefits of resolving data volumes, hierarchies, and metrics.
+                    Click "Launch Sandbox Mode" to open interactive metric sliders, customize UI factors, and simulate the exact score benefits of resolving data volumes, hierarchies, positive/negative factors, and performance metrics.
                   </p>
                 )}
               </div>
 
-              {/* Insights Grid: Benchmark + Donut + Priority Matrix */}
+              {/* Insights Grid: Benchmark + Priority Matrix */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 28 }}>
                 <BenchmarkPanel form={sandboxMode ? sandboxForm : form} />
                 <PriorityMatrix recommendations={activeResults.recommendations} />
@@ -1004,6 +1378,7 @@ export default function AnalyzerPage() {
       <QueryProfiler />
     )}
   </div>
+
 </div>
   );
 }

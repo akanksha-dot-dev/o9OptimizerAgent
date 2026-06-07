@@ -1,8 +1,8 @@
 import React from 'react';
-import { Lightbulb, AlertTriangle, TrendingUp, Clock } from 'lucide-react';
+import { Lightbulb, AlertTriangle, TrendingUp, Clock, Shield, Gauge, Activity } from 'lucide-react';
 
 function generateSummary(results, form) {
-  const { score, criticalCount, highCount, totalRecommendations, categories } = results;
+  const { score, criticalCount, highCount, totalRecommendations, categories, uiPerfScore, uiPerformance } = results;
   const topCategory = Object.entries(categories).sort((a, b) => b[1].length - a[1].length)[0];
 
   let grade, gradeColor, headline;
@@ -23,12 +23,21 @@ function generateSummary(results, form) {
   const quickWins = results.recommendations.filter(r => r.effortLevel === 'Low').length;
   const estTimeSaved = criticalCount * 15 + highCount * 8 + (totalRecommendations - criticalCount - highCount) * 3;
 
-  return { grade, gradeColor, headline, topCategory, quickWins, estTimeSaved };
+  // UI Performance insights
+  const uiTierLabel = uiPerfScore >= 80 ? 'Excellent' :
+    uiPerfScore >= 60 ? 'Good' :
+    uiPerfScore >= 40 ? 'Fair' : 'Critical';
+  const uiTierColor = uiPerfScore >= 80 ? '#10b981' :
+    uiPerfScore >= 60 ? '#3b82f6' :
+    uiPerfScore >= 40 ? '#f59e0b' : '#ef4444';
+  const positiveAdoption = uiPerformance?.positiveAdoption || 0;
+
+  return { grade, gradeColor, headline, topCategory, quickWins, estTimeSaved, uiTierLabel, uiTierColor, uiPerfScore, positiveAdoption };
 }
 
 export default function ExecutiveSummary({ results, form }) {
   if (!results) return null;
-  const { grade, gradeColor, headline, topCategory, quickWins, estTimeSaved } = generateSummary(results, form);
+  const { grade, gradeColor, headline, topCategory, quickWins, estTimeSaved, uiTierLabel, uiTierColor, uiPerfScore, positiveAdoption } = generateSummary(results, form);
 
   return (
     <div style={{
@@ -75,6 +84,20 @@ export default function ExecutiveSummary({ results, form }) {
               <Clock size={14} color="#6366f1" />
               <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
                 ~<strong style={{ color: '#6366f1' }}>{estTimeSaved}%</strong> perf. gain potential
+              </span>
+            </div>
+            {/* New: UI Performance Tier */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Shield size={14} color={uiTierColor} />
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                UI Perf: <strong style={{ color: uiTierColor }}>{uiTierLabel}</strong> ({uiPerfScore}/100)
+              </span>
+            </div>
+            {/* New: Positive Factor Coverage */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Gauge size={14} color="#8b5cf6" />
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                Optimization: <strong style={{ color: '#8b5cf6' }}>{positiveAdoption}%</strong> adoption
               </span>
             </div>
           </div>
