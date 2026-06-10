@@ -1,15 +1,49 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight, CheckCircle, Target, Download } from 'lucide-react';
+import { ArrowRight, CheckCircle, Target, Download, Sliders, DollarSign, TrendingUp, BarChart2, ShieldAlert } from 'lucide-react';
 import { PROCESS_DIMENSIONS, MATURITY_LEVELS, assessMaturity } from '../data/snopMaturityData';
 import RadarChart from '../components/RadarChart';
 import SNOPTimeline from '../components/SNOPTimeline';
 
 export default function SNOPAdvisorPage() {
+  const [activeTab, setActiveTab] = useState('advisor'); // 'advisor', 'sandbox'
   const [answers, setAnswers] = useState({});
   const [results, setResults] = useState(null);
   const [currentDim, setCurrentDim] = useState(0);
   const [roadmapView, setRoadmapView] = useState('timeline');
+
+  // Company Profile Baseline State
+  const [profileTemplate, setProfileTemplate] = useState('midmarket'); // 'small', 'midmarket', 'enterprise'
+  const [revenue, setRevenue] = useState(500); // $M
+  const [margin, setMargin] = useState(15); // %
+  const [workingCapital, setWorkingCapital] = useState(100); // $M
+  const [baselineOtif, setBaselineOtif] = useState(88); // %
+
+  // Sliders State
+  const [forecastAccuracyVal, setForecastAccuracyVal] = useState(5); // % improvement
+  const [inventoryReductionVal, setInventoryReductionVal] = useState(10); // % reduction
+  const [leadTimeReductionVal, setLeadTimeReductionVal] = useState(15); // % reduction
+  const [cycleTimeReductionVal, setCycleTimeReductionVal] = useState(4); // days reduction
+
+  const handleProfileTemplateChange = (template) => {
+    setProfileTemplate(template);
+    if (template === 'small') {
+      setRevenue(80);
+      setMargin(10);
+      setWorkingCapital(20);
+      setBaselineOtif(82);
+    } else if (template === 'midmarket') {
+      setRevenue(500);
+      setMargin(15);
+      setWorkingCapital(100);
+      setBaselineOtif(88);
+    } else if (template === 'enterprise') {
+      setRevenue(2500);
+      setMargin(22);
+      setWorkingCapital(550);
+      setBaselineOtif(91);
+    }
+  };
 
   const handleAnswer = (qId, value) => {
     setAnswers(prev => ({ ...prev, [qId]: value }));
@@ -29,11 +63,11 @@ export default function SNOPAdvisorPage() {
     lines.push(`Description: ${results.maturityLevel.description}`);
     lines.push('');
     lines.push('--- Dimension Scores ---');
-    Object.entries(results.dimensionScores).forEach(([dimId, score]) => {
+    lines.push(Object.entries(results.dimensionScores).map(([dimId, score]) => {
       const dimData = PROCESS_DIMENSIONS.find(d => d.id === dimId);
       const level = MATURITY_LEVELS.find(l => l.level === Math.round(score)) || MATURITY_LEVELS[0];
-      lines.push(`  ${dimData?.name || dimId}: L${score} (${level.name})`);
-    });
+      return `  ${dimData?.name || dimId}: L${score} (${level.name})`;
+    }).join('\n'));
     lines.push('');
     if (results.recommendations.length > 0) {
       lines.push(`--- Improvement Roadmap (${results.recommendations.length} items) ---`);
@@ -74,260 +108,598 @@ export default function SNOPAdvisorPage() {
       })
     : [];
 
+  // Sandbox calculations
+  const revenueIncrease = revenue * (forecastAccuracyVal * 0.005);
+  const costSavings = (revenue * (1 - margin / 100)) * (forecastAccuracyVal * 0.0035 + inventoryReductionVal * 0.0015 + cycleTimeReductionVal * 0.002);
+  const capitalFreed = workingCapital * (inventoryReductionVal * 0.01 + leadTimeReductionVal * 0.003);
+  const targetOtif = Math.min(99.8, baselineOtif + (forecastAccuracyVal * 0.7 + leadTimeReductionVal * 0.3 + cycleTimeReductionVal * 0.25));
+
+  const marginFrac = margin / 100;
+  const profitIncrease = revenueIncrease * marginFrac;
+  const capitalSavings = capitalFreed * 0.15; // 15% holding rate
+  const totalAnnualBenefit = profitIncrease + costSavings + capitalSavings;
+
+  const formatCurrency = (val) => {
+    if (val >= 1) return `$${val.toFixed(2)}M`;
+    return `$${(val * 1000).toFixed(0)}K`;
+  };
+
+  const handleExportScenario = () => {
+    const lines = [];
+    lines.push('=== S&OP What-If Scenario Benefit Projection ===');
+    lines.push(`Generated: ${new Date().toLocaleString()}`);
+    lines.push('');
+    lines.push('--- Baseline Company Profile ---');
+    lines.push(`  Annual Revenue: $${revenue}M`);
+    lines.push(`  Operating Margin: ${margin}%`);
+    lines.push(`  Current Working Capital: $${workingCapital}M`);
+    lines.push(`  Baseline Service Level (OTIF): ${baselineOtif}%`);
+    lines.push('');
+    lines.push('--- Simulated Process Improvements ---');
+    lines.push(`  Forecast Accuracy Improvement: +${forecastAccuracyVal}%`);
+    lines.push(`  Inventory Levels Reduction: -${inventoryReductionVal}%`);
+    lines.push(`  Supplier Lead Times Reduction: -${leadTimeReductionVal}%`);
+    lines.push(`  S&OP Cycle Time Reduction: -${cycleTimeReductionVal} days`);
+    lines.push('');
+    lines.push('--- Projected Annual Business Benefits ---');
+    lines.push(`  TOTAL ANNUAL BOTTOM-LINE BENEFIT: ${formatCurrency(totalAnnualBenefit)}`);
+    lines.push(`  • Profit from Revenue Growth: ${formatCurrency(profitIncrease)}`);
+    lines.push(`  • Operational Cost Savings: ${formatCurrency(costSavings)}`);
+    lines.push(`  • Capital Carrying Cost Savings: ${formatCurrency(capitalSavings)}`);
+    lines.push(`  • Total Working Capital Cash Freed: $${capitalFreed.toFixed(2)}M`);
+    lines.push(`  • Projected Service Level (OTIF): ${targetOtif.toFixed(1)}% (from ${baselineOtif}%)`);
+    lines.push('');
+    lines.push('Report generated by o9 Optimizer Agent Scenario Sandbox');
+
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sop-scenario-projection-${Date.now()}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="section" style={{ background: 'white', minHeight: '80vh' }}>
       <div className="analyzer-container">
         <div className="section-header">
-          <h2>S&OP / IBP Maturity Advisor</h2>
+          <h2>S&OP / IBP Maturity Advisor & Sandbox</h2>
           <p>
-            Assess your planning process maturity across key dimensions and get a
-            tailored roadmap for improvement using o9 capabilities.
+            Assess your planning process maturity or simulate dynamic business value improvements using our what-if scenario sandbox.
           </p>
         </div>
 
-        {/* Maturity Scale Legend */}
-        <div style={{
-          display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 32, flexWrap: 'wrap'
-        }}>
-          {MATURITY_LEVELS.map(l => (
-            <div key={l.level} style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '6px 14px', borderRadius: 999, fontSize: '0.75rem', fontWeight: 600,
-              background: `${l.color}10`, color: l.color, border: `1px solid ${l.color}30`
-            }}>
-              L{l.level}: {l.name}
-            </div>
-          ))}
+        {/* Sub-tabs Selector */}
+        <div className="tabs" style={{ maxWidth: 600, margin: '0 auto 32px', display: 'flex', justifyContent: 'center' }}>
+          <button
+            className={`tab-btn ${activeTab === 'advisor' ? 'active' : ''}`}
+            onClick={() => setActiveTab('advisor')}
+            style={{ flex: 1, padding: '12px 0', fontSize: '0.88rem' }}
+          >
+            Maturity Assessment Roadmap
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'sandbox' ? 'active' : ''}`}
+            onClick={() => setActiveTab('sandbox')}
+            style={{ flex: 1, padding: '12px 0', fontSize: '0.88rem' }}
+          >
+            What-If Scenario Sandbox
+          </button>
         </div>
 
         <AnimatePresence mode="wait">
-          {!results ? (
+          {activeTab === 'advisor' ? (
             <motion.div
-              key="form"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0, x: -30 }}
-              transition={{ duration: 0.3 }}
-              className="analyzer-form"
+              key="advisor-tab"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
             >
-              {/* Progress bar in form header */}
+              {/* Maturity Scale Legend */}
               <div style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                marginBottom: 24, paddingBottom: 16, borderBottom: '1px solid var(--border-subtle)'
+                display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 32, flexWrap: 'wrap'
               }}>
-                <p style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                  Progress: {answeredCount} / {totalQuestions} questions
-                </p>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, maxWidth: 300, marginLeft: 16 }}>
-                  <div className="progress-bar" style={{ flex: 1 }}>
-                    <div className="progress-bar-fill" style={{ width: `${(answeredCount / totalQuestions) * 100}%` }} />
+                {MATURITY_LEVELS.map(l => (
+                  <div key={l.level} style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '6px 14px', borderRadius: 999, fontSize: '0.75rem', fontWeight: 600,
+                    background: `${l.color}10`, color: l.color, border: `1px solid ${l.color}30`
+                  }}>
+                    L{l.level}: {l.name}
                   </div>
-                  <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--accent-blue)', fontFamily: 'var(--font-mono)' }}>
-                    {Math.round((answeredCount / totalQuestions) * 100)}%
-                  </span>
-                </div>
-              </div>
-
-              {/* Dimension Tabs */}
-              <div className="tabs" style={{ marginBottom: 28 }}>
-                {PROCESS_DIMENSIONS.map((d, i) => (
-                  <button
-                    key={d.id}
-                    className={`tab-btn ${currentDim === i ? 'active' : ''}`}
-                    onClick={() => setCurrentDim(i)}
-                  >
-                    {d.icon} {d.name}
-                  </button>
                 ))}
               </div>
 
-              {/* Questions */}
-              <div style={{ marginBottom: 24 }}>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: 20 }}>
-                  {dim.icon} {dim.name}
-                </h3>
-                {dim.questions.map((q, qi) => (
-                  <div key={q.id} style={{ marginBottom: 24 }}>
-                    <p style={{
-                      fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)',
-                      marginBottom: 10
-                    }}>
-                      {qi + 1}. {q.text}
+              {!results ? (
+                <div className="analyzer-form">
+                  {/* Progress bar in form header */}
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    marginBottom: 24, paddingBottom: 16, borderBottom: '1px solid var(--border-subtle)'
+                  }}>
+                    <p style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                      Progress: {answeredCount} / {totalQuestions} questions
                     </p>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      {q.options.map(opt => (
-                        <div
-                          key={opt.value}
-                          onClick={() => handleAnswer(q.id, opt.value)}
-                          style={{
-                            display: 'flex', alignItems: 'center', gap: 12,
-                            padding: '10px 16px', borderRadius: 'var(--radius-sm)',
-                            border: `1px solid ${answers[q.id] === opt.value ? 'var(--accent-blue)' : 'var(--border-subtle)'}`,
-                            background: answers[q.id] === opt.value ? 'var(--accent-blue-light)' : 'white',
-                            cursor: 'pointer', transition: 'all 150ms ease', fontSize: '0.85rem'
-                          }}
-                        >
-                          <div style={{
-                            width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: '0.7rem', fontWeight: 700,
-                            background: answers[q.id] === opt.value ? 'var(--accent-blue)' : 'var(--bg-input)',
-                            color: answers[q.id] === opt.value ? 'white' : 'var(--text-muted)',
-                          }}>
-                            {opt.value}
-                          </div>
-                          <span style={{ color: answers[q.id] === opt.value ? 'var(--accent-blue-dark)' : 'var(--text-secondary)' }}>
-                            {opt.label}
-                          </span>
-                        </div>
-                      ))}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, maxWidth: 300, marginLeft: 16 }}>
+                      <div className="progress-bar" style={{ flex: 1 }}>
+                        <div className="progress-bar-fill" style={{ width: `${(answeredCount / totalQuestions) * 100}%` }} />
+                      </div>
+                      <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--accent-blue)', fontFamily: 'var(--font-mono)' }}>
+                        {Math.round((answeredCount / totalQuestions) * 100)}%
+                      </span>
                     </div>
                   </div>
-                ))}
-              </div>
 
-              {/* Navigation */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  {answeredCount} of {totalQuestions} questions answered
-                </p>
-                <div style={{ display: 'flex', gap: 12 }}>
-                  {currentDim < PROCESS_DIMENSIONS.length - 1 ? (
-                    <button className="btn btn-secondary" onClick={() => setCurrentDim(currentDim + 1)}>
-                      Next: {PROCESS_DIMENSIONS[currentDim + 1].name} <ArrowRight size={16} />
-                    </button>
-                  ) : (
-                    <button
-                      className="btn btn-primary"
-                      onClick={handleAssess}
-                      disabled={answeredCount < 5}
-                    >
-                      <Target size={18} /> Assess Maturity
-                    </button>
-                  )}
+                  {/* Dimension Tabs */}
+                  <div className="tabs" style={{ marginBottom: 28 }}>
+                    {PROCESS_DIMENSIONS.map((d, i) => (
+                      <button
+                        key={d.id}
+                        className={`tab-btn ${currentDim === i ? 'active' : ''}`}
+                        onClick={() => setCurrentDim(i)}
+                      >
+                        {d.icon} {d.name}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Questions */}
+                  <div style={{ marginBottom: 24 }}>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: 20 }}>
+                      {dim.icon} {dim.name}
+                    </h3>
+                    {dim.questions.map((q, qi) => (
+                      <div key={q.id} style={{ marginBottom: 24 }}>
+                        <p style={{
+                          fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)',
+                          marginBottom: 10
+                        }}>
+                          {qi + 1}. {q.text}
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {q.options.map(opt => (
+                            <div
+                              key={opt.value}
+                              onClick={() => handleAnswer(q.id, opt.value)}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 12,
+                                padding: '10px 16px', borderRadius: 'var(--radius-sm)',
+                                border: `1px solid ${answers[q.id] === opt.value ? 'var(--accent-blue)' : 'var(--border-subtle)'}`,
+                                background: answers[q.id] === opt.value ? 'var(--accent-blue-light)' : 'white',
+                                cursor: 'pointer', transition: 'all 150ms ease', fontSize: '0.85rem'
+                              }}
+                            >
+                              <div style={{
+                                width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: '0.7rem', fontWeight: 700,
+                                background: answers[q.id] === opt.value ? 'var(--accent-blue)' : 'var(--bg-input)',
+                                color: answers[q.id] === opt.value ? 'white' : 'var(--text-muted)',
+                              }}>
+                                {opt.value}
+                              </div>
+                              <span style={{ color: answers[q.id] === opt.value ? 'var(--accent-blue-dark)' : 'var(--text-secondary)' }}>
+                                {opt.label}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Navigation */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                      {answeredCount} of {totalQuestions} questions answered
+                    </p>
+                    <div style={{ display: 'flex', gap: 12 }}>
+                      {currentDim < PROCESS_DIMENSIONS.length - 1 ? (
+                        <button className="btn btn-secondary" onClick={() => setCurrentDim(currentDim + 1)}>
+                          Next: {PROCESS_DIMENSIONS[currentDim + 1].name} <ArrowRight size={16} />
+                        </button>
+                      ) : (
+                        <button
+                          className="btn btn-primary"
+                          onClick={handleAssess}
+                          disabled={answeredCount < 5}
+                        >
+                          <Target size={18} /> Assess Maturity
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div>
+                  {/* Overall Result */}
+                  <div className="stats-bar">
+                    <div className="stat-card" style={{ padding: 32, textAlign: 'center' }}>
+                      <div style={{
+                        fontSize: '3rem', fontWeight: 800, fontFamily: 'var(--font-mono)',
+                        color: results.maturityLevel.color, marginBottom: 4
+                      }}>
+                        L{Math.round(results.overallScore)}
+                      </div>
+                      <div style={{
+                        fontSize: '1.1rem', fontWeight: 600, color: results.maturityLevel.color
+                      }}>
+                        {results.maturityLevel.name}
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 4 }}>
+                        {results.maturityLevel.description}
+                      </div>
+                    </div>
+                    {Object.entries(results.dimensionScores).map(([dimId, score]) => {
+                      const dimData = PROCESS_DIMENSIONS.find(d => d.id === dimId);
+                      const level = MATURITY_LEVELS.find(l => l.level === Math.round(score)) || MATURITY_LEVELS[0];
+                      return (
+                        <div className="stat-card" key={dimId} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                          <div style={{ fontSize: '1.5rem', marginBottom: 4 }}>{dimData?.icon}</div>
+                          <div className="stat-value" style={{ color: level.color, fontSize: '1.5rem' }}>
+                            L{score}
+                          </div>
+                          <div className="stat-label">{dimData?.name}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Radar Chart */}
+                  {radarData.length >= 3 && (
+                    <div className="analyzer-form" style={{ marginBottom: 24, padding: '24px 32px' }}>
+                      <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: 8, textAlign: 'center' }}>
+                        Maturity Dimension Distribution
+                      </h3>
+                      <RadarChart data={radarData} size={320} color="#6366f1" />
+                    </div>
+                  )}
+
+                  {/* Improvement Roadmap */}
+                  {results.recommendations.length > 0 && (
+                    <div style={{ marginTop: 32 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+                        <h3 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>
+                          🗺️ Improvement Roadmap
+                        </h3>
+                        <div className="tabs" style={{ marginBottom: 0, padding: 2, background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)' }}>
+                          <button
+                            className={`tab-btn ${roadmapView === 'timeline' ? 'active' : ''}`}
+                            onClick={() => setRoadmapView('timeline')}
+                            style={{ padding: '6px 14px', fontSize: '0.75rem' }}
+                          >
+                            Roadmap Timeline
+                          </button>
+                          <button
+                            className={`tab-btn ${roadmapView === 'list' ? 'active' : ''}`}
+                            onClick={() => setRoadmapView('list')}
+                            style={{ padding: '6px 14px', fontSize: '0.75rem' }}
+                          >
+                            Detailed Action List
+                          </button>
+                        </div>
+                      </div>
+
+                      {roadmapView === 'timeline' ? (
+                        <SNOPTimeline 
+                          recommendations={results.recommendations} 
+                          baselineScore={results.overallScore} 
+                        />
+                      ) : (
+                        <div className="results-section">
+                          {results.recommendations.map((rec, i) => (
+                            <div key={i} className="result-card" style={{ padding: '20px 24px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                                <span className={`result-severity severity-${rec.priority}`}>{rec.priority}</span>
+                                <h4 style={{ fontSize: '0.95rem', fontWeight: 600 }}>{rec.dimension}</h4>
+                                <div style={{
+                                  display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto',
+                                  fontSize: '0.78rem', fontWeight: 600, color: 'var(--accent-blue)'
+                                }}>
+                                  L{rec.currentLevel} → L{rec.targetLevel}
+                                </div>
+                              </div>
+                              <ul style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingLeft: 0, listStyle: 'none' }}>
+                                {rec.actions.map((action, j) => (
+                                  <li key={j} style={{
+                                    display: 'flex', alignItems: 'flex-start', gap: 10,
+                                    fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.6
+                                  }}>
+                                    <CheckCircle size={15} style={{ color: 'var(--accent-emerald)', flexShrink: 0, marginTop: 3 }} />
+                                    {action}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
+                    <button className="btn btn-secondary" onClick={() => { setResults(null); setAnswers({}); setCurrentDim(0); }}>
+                      Retake Assessment
+                    </button>
+                    <button className="btn btn-primary" onClick={handleExportRoadmap}>
+                      <Download size={16} /> Export Roadmap
+                    </button>
+                  </div>
+                </div>
+              )}
             </motion.div>
           ) : (
             <motion.div
-              key="results"
-              initial={{ opacity: 0, y: 20 }}
+              key="sandbox-tab"
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.35 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+              style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 28, alignItems: 'stretch' }}
             >
-              {/* Overall Result */}
-              <div className="stats-bar">
-                <div className="stat-card" style={{ padding: 32, textAlign: 'center' }}>
-                  <div style={{
-                    fontSize: '3rem', fontWeight: 800, fontFamily: 'var(--font-mono)',
-                    color: results.maturityLevel.color, marginBottom: 4
-                  }}>
-                    L{Math.round(results.overallScore)}
+              {/* Left Column: Sliders and Inputs */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                {/* Baseline Setup Card */}
+                <div className="card" style={{ padding: 24 }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                    <Sliders size={18} color="var(--accent-indigo)" /> Company Baseline Profile
+                  </h3>
+                  
+                  <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+                    {['small', 'midmarket', 'enterprise'].map(t => (
+                      <button
+                        key={t}
+                        onClick={() => handleProfileTemplateChange(t)}
+                        style={{
+                          flex: 1, padding: '6px 12px', fontSize: '0.72rem', borderRadius: 6, fontWeight: 700, cursor: 'pointer',
+                          background: profileTemplate === t ? 'var(--accent-blue-light)' : 'var(--bg-input)',
+                          color: profileTemplate === t ? 'var(--accent-blue-dark)' : 'var(--text-secondary)',
+                          border: `1px solid ${profileTemplate === t ? 'var(--accent-blue)' : 'var(--border-subtle)'}`
+                        }}
+                      >
+                        {t.charAt(0).toUpperCase() + t.slice(1)} Template
+                      </button>
+                    ))}
                   </div>
-                  <div style={{
-                    fontSize: '1.1rem', fontWeight: 600, color: results.maturityLevel.color
-                  }}>
-                    {results.maturityLevel.name}
-                  </div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 4 }}>
-                    {results.maturityLevel.description}
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <label style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)' }}>Annual Revenue</label>
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type="number"
+                          value={revenue}
+                          onChange={e => setRevenue(Math.max(1, Number(e.target.value)))}
+                          style={{ padding: '6px 10px 6px 20px', width: '100%', fontSize: '0.8rem', borderRadius: 4, border: '1px solid var(--border-subtle)' }}
+                        />
+                        <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>$</span>
+                        <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>M</span>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <label style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)' }}>Operating Margin</label>
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type="number"
+                          value={margin}
+                          onChange={e => setMargin(Math.max(1, Math.min(90, Number(e.target.value))))}
+                          style={{ padding: '6px 20px 6px 10px', width: '100%', fontSize: '0.8rem', borderRadius: 4, border: '1px solid var(--border-subtle)' }}
+                        />
+                        <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>%</span>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <label style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)' }}>Working Capital</label>
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type="number"
+                          value={workingCapital}
+                          onChange={e => setWorkingCapital(Math.max(1, Number(e.target.value)))}
+                          style={{ padding: '6px 10px 6px 20px', width: '100%', fontSize: '0.8rem', borderRadius: 4, border: '1px solid var(--border-subtle)' }}
+                        />
+                        <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>$</span>
+                        <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>M</span>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <label style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)' }}>Baseline OTIF</label>
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type="number"
+                          value={baselineOtif}
+                          onChange={e => setBaselineOtif(Math.max(10, Math.min(99, Number(e.target.value))))}
+                          style={{ padding: '6px 20px 6px 10px', width: '100%', fontSize: '0.8rem', borderRadius: 4, border: '1px solid var(--border-subtle)' }}
+                        />
+                        <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>%</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                {Object.entries(results.dimensionScores).map(([dimId, score]) => {
-                  const dimData = PROCESS_DIMENSIONS.find(d => d.id === dimId);
-                  const level = MATURITY_LEVELS.find(l => l.level === Math.round(score)) || MATURITY_LEVELS[0];
-                  return (
-                    <div className="stat-card" key={dimId} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                      <div style={{ fontSize: '1.5rem', marginBottom: 4 }}>{dimData?.icon}</div>
-                      <div className="stat-value" style={{ color: level.color, fontSize: '1.5rem' }}>
-                        L{score}
+
+                {/* S&OP Improvement Sliders Card */}
+                <div className="card" style={{ padding: 24 }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
+                    <TrendingUp size={18} color="var(--accent-blue)" /> Simulated o9 Process Improvements
+                  </h3>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    {/* Forecast Accuracy Slider */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                        <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>Forecast Accuracy Improvement</span>
+                        <span style={{ fontWeight: 700, color: 'var(--accent-indigo)', fontFamily: 'var(--font-mono)' }}>+{forecastAccuracyVal}%</span>
                       </div>
-                      <div className="stat-label">{dimData?.name}</div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="15"
+                        step="1"
+                        value={forecastAccuracyVal}
+                        onChange={e => setForecastAccuracyVal(Number(e.target.value))}
+                        style={{ accentColor: 'var(--accent-indigo)', width: '100%', height: 6, borderRadius: 99 }}
+                      />
+                      <span style={{ fontSize: '0.66rem', color: 'var(--text-muted)' }}>Decreases emergency stockouts and production rush fees.</span>
                     </div>
-                  );
-                })}
+
+                    {/* Inventory Reduction Slider */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                        <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>Safety Stock / Inventory Reduction</span>
+                        <span style={{ fontWeight: 700, color: 'var(--accent-blue)', fontFamily: 'var(--font-mono)' }}>-{inventoryReductionVal}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="30"
+                        step="1"
+                        value={inventoryReductionVal}
+                        onChange={e => setInventoryReductionVal(Number(e.target.value))}
+                        style={{ accentColor: 'var(--accent-blue)', width: '100%', height: 6, borderRadius: 99 }}
+                      />
+                      <span style={{ fontSize: '0.66rem', color: 'var(--text-muted)' }}>Frees up cash and reduces warehouse storage holding charges.</span>
+                    </div>
+
+                    {/* Lead Time Slider */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                        <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>Supplier/Logistics Lead Time Reduction</span>
+                        <span style={{ fontWeight: 700, color: 'var(--accent-emerald)', fontFamily: 'var(--font-mono)' }}>-{leadTimeReductionVal}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="40"
+                        step="1"
+                        value={leadTimeReductionVal}
+                        onChange={e => setLeadTimeReductionVal(Number(e.target.value))}
+                        style={{ accentColor: 'var(--accent-emerald)', width: '100%', height: 6, borderRadius: 99 }}
+                      />
+                      <span style={{ fontSize: '0.66rem', color: 'var(--text-muted)' }}>Reduces pipeline safety buffer requirements and raises response speed.</span>
+                    </div>
+
+                    {/* Cycle Time Slider */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                        <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>S&OP Planning Cycle Acceleration</span>
+                        <span style={{ fontWeight: 700, color: 'var(--accent-rose)', fontFamily: 'var(--font-mono)' }}>-{cycleTimeReductionVal} Days</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="10"
+                        step="1"
+                        value={cycleTimeReductionVal}
+                        onChange={e => setCycleTimeReductionVal(Number(e.target.value))}
+                        style={{ accentColor: 'var(--accent-rose)', width: '100%', height: 6, borderRadius: 99 }}
+                      />
+                      <span style={{ fontSize: '0.66rem', color: 'var(--text-muted)' }}>Decreases decision delay latency from weeks to days.</span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              {/* Radar Chart */}
-              {radarData.length >= 3 && (
-                <div className="analyzer-form" style={{ marginBottom: 24, padding: '24px 32px' }}>
-                  <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: 8, textAlign: 'center' }}>
-                    Maturity Dimension Distribution
-                  </h3>
-                  <RadarChart data={radarData} size={320} color="#6366f1" />
+              {/* Right Column: Benefits Dashboard */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                {/* Total benefit scorecard */}
+                <div style={{ textAlign: 'center', background: 'var(--gradient-hero)', border: '1px solid var(--border-subtle)', padding: '28px 20px', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-md)' }}>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--accent-blue-dark)', textTransform: 'uppercase', letterSpacing: 1 }}>Total Annual Bottom-Line Benefit</span>
+                  <div style={{ fontSize: '3rem', fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', margin: '6px 0' }}>
+                    {formatCurrency(totalAnnualBenefit)}
+                  </div>
+                  <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: 0, padding: '0 8px', lineHeight: 1.4 }}>
+                    Calculated direct operational margin profits, scrap/holding expense savings, and 15% holding rate savings.
+                  </p>
                 </div>
-              )}
 
-              {/* Improvement Roadmap */}
-              {results.recommendations.length > 0 && (
-                <div style={{ marginTop: 32 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
-                    <h3 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>
-                      🗺️ Improvement Roadmap
-                    </h3>
-                    <div className="tabs" style={{ marginBottom: 0, padding: 2, background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)' }}>
-                      <button
-                        className={`tab-btn ${roadmapView === 'timeline' ? 'active' : ''}`}
-                        onClick={() => setRoadmapView('timeline')}
-                        style={{ padding: '6px 14px', fontSize: '0.75rem' }}
-                      >
-                        Roadmap Timeline
-                      </button>
-                      <button
-                        className={`tab-btn ${roadmapView === 'list' ? 'active' : ''}`}
-                        onClick={() => setRoadmapView('list')}
-                        style={{ padding: '6px 14px', fontSize: '0.75rem' }}
-                      >
-                        Detailed Action List
-                      </button>
+                {/* KPI details grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                  {/* Revenue card */}
+                  <div className="card" style={{ padding: 16, display: 'flex', gap: 12, alignItems: 'center', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ background: 'var(--accent-indigo-light)', padding: 8, borderRadius: 6, color: 'var(--accent-indigo)' }}><DollarSign size={16} /></div>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Revenue Growth</span>
+                      <span style={{ fontSize: '0.95rem', fontWeight: 800 }}>+{formatCurrency(revenueIncrease)}</span>
+                      <span style={{ fontSize: '0.68rem', color: 'var(--accent-emerald)', fontWeight: 600 }}>+{((revenueIncrease / revenue) * 100).toFixed(1)}% Sales</span>
                     </div>
                   </div>
 
-                  {roadmapView === 'timeline' ? (
-                    <SNOPTimeline 
-                      recommendations={results.recommendations} 
-                      baselineScore={results.overallScore} 
-                    />
-                  ) : (
-                    <div className="results-section">
-                      {results.recommendations.map((rec, i) => (
-                        <div key={i} className="result-card" style={{ padding: '20px 24px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-                            <span className={`result-severity severity-${rec.priority}`}>{rec.priority}</span>
-                            <h4 style={{ fontSize: '0.95rem', fontWeight: 600 }}>{rec.dimension}</h4>
-                            <div style={{
-                              display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto',
-                              fontSize: '0.78rem', fontWeight: 600, color: 'var(--accent-blue)'
-                            }}>
-                              L{rec.currentLevel} → L{rec.targetLevel}
-                            </div>
-                          </div>
-                          <ul style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingLeft: 0, listStyle: 'none' }}>
-                            {rec.actions.map((action, j) => (
-                              <li key={j} style={{
-                                display: 'flex', alignItems: 'flex-start', gap: 10,
-                                fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.6
-                              }}>
-                                <CheckCircle size={15} style={{ color: 'var(--accent-emerald)', flexShrink: 0, marginTop: 3 }} />
-                                {action}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      ))}
+                  {/* Operational costs card */}
+                  <div className="card" style={{ padding: 16, display: 'flex', gap: 12, alignItems: 'center', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ background: 'var(--accent-blue-light)', padding: 8, borderRadius: 6, color: 'var(--accent-blue)' }}><TrendingUp size={16} /></div>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Opex Savings</span>
+                      <span style={{ fontSize: '0.95rem', fontWeight: 800 }}>+{formatCurrency(costSavings)}</span>
+                      <span style={{ fontSize: '0.68rem', color: 'var(--accent-blue)', fontWeight: 600 }}>Less scrap & fees</span>
                     </div>
-                  )}
-                </div>
-              )}
+                  </div>
 
-              <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
-                <button className="btn btn-secondary" onClick={() => { setResults(null); setAnswers({}); setCurrentDim(0); }}>
-                  Retake Assessment
-                </button>
-                <button className="btn btn-primary" onClick={handleExportRoadmap}>
-                  <Download size={16} /> Export Roadmap
-                </button>
+                  {/* Capital card */}
+                  <div className="card" style={{ padding: 16, display: 'flex', gap: 12, alignItems: 'center', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ background: 'var(--accent-emerald-light)', padding: 8, borderRadius: 6, color: 'var(--accent-emerald)' }}><BarChart2 size={16} /></div>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Cash Capital Freed</span>
+                      <span style={{ fontSize: '0.95rem', fontWeight: 800 }}>{formatCurrency(capitalFreed)}</span>
+                      <span style={{ fontSize: '0.68rem', color: 'var(--accent-emerald)', fontWeight: 600 }}>One-time cash release</span>
+                    </div>
+                  </div>
+
+                  {/* Service level card */}
+                  <div className="card" style={{ padding: 16, display: 'flex', gap: 12, alignItems: 'center', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ background: 'var(--accent-rose-light)', padding: 8, borderRadius: 6, color: 'var(--accent-rose)' }}><ShieldAlert size={16} /></div>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Service Level (OTIF)</span>
+                      <span style={{ fontSize: '0.95rem', fontWeight: 800 }}>{targetOtif.toFixed(1)}%</span>
+                      <span style={{ fontSize: '0.68rem', color: 'var(--accent-rose)', fontWeight: 600 }}>From {baselineOtif}% baseline</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stacked Chart Card */}
+                <div className="card" style={{ padding: 20 }}>
+                  <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 12 }}>
+                    Annual Bottom-line Benefit Breakdown
+                  </span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {[
+                      { label: 'Profit from Revenue Growth', value: profitIncrease, color: 'var(--accent-indigo)' },
+                      { label: 'Operational Cost Savings', value: costSavings, color: 'var(--accent-blue)' },
+                      { label: 'Capital Holding Cost Savings', value: capitalSavings, color: 'var(--accent-emerald)' }
+                    ].map((item, idx) => {
+                      const percent = totalAnnualBenefit > 0 ? (item.value / totalAnnualBenefit) * 100 : 0;
+                      return (
+                        <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem' }}>
+                            <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{item.label}</span>
+                            <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{formatCurrency(item.value)} ({percent.toFixed(0)}%)</span>
+                          </div>
+                          <div style={{ height: 8, background: 'var(--bg-input)', borderRadius: 99, overflow: 'hidden' }}>
+                            <motion.div
+                              initial={{ width: 0 }}
+                              animate={{ width: `${percent}%` }}
+                              transition={{ duration: 0.5, delay: idx * 0.1 }}
+                              style={{ height: '100%', background: item.color, borderRadius: 99 }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleExportScenario}
+                    style={{ width: '100%', marginTop: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                  >
+                    <Download size={16} /> Export Benefit Projection Scenario
+                  </button>
+                </div>
               </div>
             </motion.div>
           )}

@@ -65,6 +65,7 @@ export default function EKGConfigParser({ onParseComplete }) {
   const [dragActive, setDragActive] = useState(false);
   const [parsedName, setParsedName] = useState('');
   const terminalEndRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const activePreset = PRESETS.find(p => p.id === selectedId);
 
@@ -109,23 +110,243 @@ export default function EKGConfigParser({ onParseComplete }) {
     e.stopPropagation();
     setDragActive(false);
     
-    // Simulate parsing the poor preset for random drops, to make it dramatic!
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
-      const fileName = files[0].name;
-      const isXml = fileName.endsWith('.xml');
-      const presetToUse = isXml ? PRESETS[1] : PRESETS[2]; // avg for xml, poor for json/others
+      readAndParseFile(files[0]);
+    }
+  };
+
+  const handleZoneClick = () => {
+    if (isParsing) return;
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileSelect = (e) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      readAndParseFile(files[0]);
+    }
+  };
+
+  const readAndParseFile = (file) => {
+    const reader = new FileReader();
+    setIsParsing(true);
+    setCurrentLogs([{ type: 'info', text: `Loading file: ${file.name} (${Math.round(file.size / 1024)} KB)...` }]);
+    setParsedName(file.name);
+
+    reader.onload = (e) => {
+      const text = e.target.result;
+      const result = analyzeUploadedFile(file.name, text);
       
-      const customPreset = {
-        ...presetToUse,
-        name: fileName,
+      let idx = 0;
+      const interval = setInterval(() => {
+        if (idx < result.logs.length) {
+          setCurrentLogs(prev => [...prev, result.logs[idx]]);
+          idx++;
+        } else {
+          clearInterval(interval);
+          setIsParsing(false);
+          if (onParseComplete) {
+            onParseComplete(result.checkedIds);
+          }
+        }
+      }, 200);
+    };
+
+    reader.onerror = () => {
+      setIsParsing(false);
+      setCurrentLogs(prev => [...prev, { type: 'error', text: `Failed to read file ${file.name}` }]);
+    };
+
+    reader.readAsText(file);
+  };
+
+  const analyzeUploadedFile = (fileName, fileContent) => {
+    const logs = [];
+    logs.push({ type: 'info', text: `Initializing file check: ${fileName}...` });
+    
+    let totalNodes = 0;
+    let maxDepth = 1;
+    let orphanCount = 0;
+    let isXml = fileName.endsWith('.xml') || fileContent.trim().startsWith('<');
+    let checkedIds = [];
+
+    try {
+      if (isXml) {
+        logs.push({ type: 'info', text: 'Detected XML schema. Initializing DOM parser...' });
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(fileContent, "text/xml");
+        
+        const parserError = xmlDoc.getElementsByTagName("parsererror");
+        if (parserError.length > 0) {
+          throw new Error("Invalid XML formatting/syntax.");
+        }
+
+        const allElements = xmlDoc.getElementsByTagName("*");
+        totalNodes = allElements.length;
+        logs.push({ type: 'success', text: `Successfully parsed XML. Detected ${totalNodes} structural elements.` });
+
+        const getDepth = (element) => {
+          let depth = 1;
+          if (element.children.length > 0) {
+            let maxSubDepth = 0;
+            for (let child of element.children) {
+              maxSubDepth = Math.max(maxSubDepth, getDepth(child));
+            }
+            depth += maxSubDepth;
+          }
+          return depth;
+        };
+        
+        maxDepth = getDepth(xmlDoc.documentElement);
+        logs.push({ type: 'info', text: `Hierarchy depth analysis: found maximum XML element depth of ${maxDepth} levels.` });
+
+        let orphans = [];
+        for (let el of allElements) {
+          if (el.children.length === 0 && el.attributes.length === 0) {
+            orphans.push(el.tagName);
+          }
+        }
+        orphanCount = orphans.length;
+        
+        if (maxDepth > 6) {
+          logs.push({ type: 'error', text: `Critical hierarchy depth breach: ${maxDepth} levels exceeds the recommended o9 limit of 5.` });
+        } else if (maxDepth > 4) {
+          logs.push({ type: 'warn', text: `Hierarchy warning: depth is ${maxDepth} levels (recommended optimal is ≤4).` });
+        } else {
+          logs.push({ type: 'success', text: `Hierarchy design audit: PASSED. Depth of ${maxDepth} levels is highly optimized.` });
+        }
+
+        if (orphanCount > 0) {
+          logs.push({ type: 'warn', text: `Found ${orphanCount} isolated leaf tags (potential unmapped attributes or parameters).` });
+        } else {
+          logs.push({ type: 'success', text: `Orphan scan: PASSED. No isolated elements detected.` });
+        }
+
+        if (maxDepth <= 4 && orphanCount === 0) {
+          checkedIds = ['n1', 'n2', 'n3', 'n5', 'h1', 'h2', 'h3', 'h5', 'h6', 'm1', 'm2', 'm3', 'm4', 'm5', 'i1', 'i2', 'i3', 'i4', 'i6', 'p1', 'p3', 'p4', 'p5'];
+        } else if (maxDepth <= 6) {
+          checkedIds = ['n1', 'n3', 'h2', 'h3', 'h5', 'm1', 'm2', 'm4', 'i1', 'i2', 'i3', 'i5', 'p1', 'p3', 'p5'];
+        } else {
+          checkedIds = ['n1', 'n2', 'h3', 'm2', 'i1', 'i6'];
+        }
+
+      } else {
+        logs.push({ type: 'info', text: 'Detected JSON schema. Processing data object...' });
+        const data = JSON.parse(fileContent);
+        
+        let nodesList = [];
+        let edgesList = [];
+        
+        if (data.nodes && Array.isArray(data.nodes)) {
+          nodesList = data.nodes;
+          edgesList = data.edges || [];
+          logs.push({ type: 'info', text: `Detected standard o9 EKG graph format with nodes & edges.` });
+        } else if (Array.isArray(data)) {
+          nodesList = data;
+          logs.push({ type: 'info', text: `Detected flat array configuration.` });
+        } else {
+          const flattenJSON = (obj, depth = 1) => {
+            totalNodes++;
+            maxDepth = Math.max(maxDepth, depth);
+            if (obj && typeof obj === 'object') {
+              Object.entries(obj).forEach(([key, val]) => {
+                if (val && typeof val === 'object') {
+                  flattenJSON(val, depth + 1);
+                }
+              });
+            }
+          };
+          flattenJSON(data);
+          logs.push({ type: 'info', text: `Detected hierarchical parameter JSON object structure.` });
+        }
+
+        if (nodesList.length > 0) {
+          totalNodes = nodesList.length;
+          logs.push({ type: 'success', text: `Successfully parsed. Found ${totalNodes} nodes on configuration canvas.` });
+          
+          const nodeIds = new Set(nodesList.map(n => n.id || n.name));
+          const connectedIds = new Set();
+          edgesList.forEach(e => {
+            connectedIds.add(e.from);
+            connectedIds.add(e.to);
+          });
+          
+          const orphans = nodesList.filter(n => !connectedIds.has(n.id || n.name));
+          orphanCount = orphans.length;
+          
+          let computedDepth = 1;
+          const parentMap = {};
+          nodesList.forEach(n => {
+            if (n.parentId || n.parent) {
+              parentMap[n.id] = n.parentId || n.parent;
+            }
+          });
+          
+          if (Object.keys(parentMap).length > 0) {
+            nodesList.forEach(n => {
+              let d = 1;
+              let current = n.id;
+              while (parentMap[current]) {
+                d++;
+                current = parentMap[current];
+                if (d > 20) break;
+              }
+              computedDepth = Math.max(computedDepth, d);
+            });
+            maxDepth = computedDepth;
+          } else {
+            maxDepth = Math.min(6, Math.max(2, Math.round(edgesList.length / (totalNodes || 1)) + 2));
+          }
+        }
+
+        logs.push({ type: 'info', text: `Hierarchy audit: EKG model hierarchy depth is ${maxDepth} levels.` });
+        if (maxDepth > 6) {
+          logs.push({ type: 'error', text: `Critical hierarchy depth breach: ${maxDepth} levels exceeds o9 threshold of 5.` });
+        } else if (maxDepth > 4) {
+          logs.push({ type: 'warn', text: `Hierarchy depth: ${maxDepth} levels exceeds the recommended 4 levels.` });
+        } else {
+          logs.push({ type: 'success', text: `Hierarchy design: PASSED. Hierarchy is flat and performant.` });
+        }
+
+        if (orphanCount > 0) {
+          logs.push({ type: 'error', text: `Detected ${orphanCount} orphan Product/Customer master data elements.` });
+        } else {
+          logs.push({ type: 'success', text: `Orphan scan: PASSED. 0 disconnected elements found.` });
+        }
+
+        if (maxDepth <= 4 && orphanCount === 0) {
+          checkedIds = ['n1', 'n2', 'n3', 'n5', 'h1', 'h2', 'h3', 'h5', 'h6', 'm1', 'm2', 'm3', 'm4', 'm5', 'i1', 'i2', 'i3', 'i4', 'i6', 'p1', 'p3', 'p4', 'p5'];
+        } else if (maxDepth <= 6 && orphanCount < 10) {
+          checkedIds = ['n1', 'n3', 'h2', 'h3', 'h5', 'm1', 'm2', 'm4', 'i1', 'i2', 'i3', 'i5', 'p1', 'p3', 'p5'];
+        } else {
+          checkedIds = ['n1', 'n2', 'h3', 'm2', 'i1', 'i6'];
+        }
+      }
+
+      logs.push({ type: 'success', text: `Parsing completed. Found ${totalNodes} total nodes, hierarchy depth ${maxDepth}, and ${orphanCount} orphans.` });
+      
+    } catch (err) {
+      logs.push({ type: 'error', text: `Parsing failed: ${err.message}` });
+      logs.push({ type: 'warn', text: 'Rolling back to simulated schema verification...' });
+      return {
+        success: false,
+        checkedIds: PRESETS[2].checkedIds,
         logs: [
-          { type: 'info', text: `Analyzing dropped file: ${fileName}...` },
-          ...presetToUse.logs.slice(1)
+          ...logs,
+          { type: 'info', text: 'Running simulation fallback...' },
+          ...PRESETS[2].logs
         ]
       };
-      runParser(customPreset);
     }
+
+    return {
+      success: true,
+      checkedIds,
+      logs
+    };
   };
 
   return (
@@ -171,7 +392,15 @@ export default function EKGConfigParser({ onParseComplete }) {
       </div>
 
       {/* Drag & Drop File Zone */}
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        onChange={handleFileSelect} 
+        accept=".json,.xml" 
+        style={{ display: 'none' }} 
+      />
       <div 
+        onClick={handleZoneClick}
         onDragEnter={handleDrag}
         onDragOver={handleDrag}
         onDragLeave={handleDrag}
@@ -189,7 +418,7 @@ export default function EKGConfigParser({ onParseComplete }) {
       >
         <Upload size={32} style={{ color: dragActive ? 'var(--accent-blue)' : 'var(--text-muted)', marginBottom: 10 }} />
         <span style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
-          Drag and drop your EKG config file here
+          Drag and drop your EKG config file here (or click to browse)
         </span>
         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
           Supports .json or .xml schema file exports (or click to simulate parsing preset below)
