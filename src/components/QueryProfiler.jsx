@@ -159,6 +159,92 @@ function getLineOfKeyword(str, keyword) {
   return getLineOfIndex(str, index);
 }
 
+// Line diff computing using LCS
+function computeLineDiff(original, optimized) {
+  const origLines = (original || '').split('\n');
+  const optLines = (optimized || '').split('\n');
+  
+  const dp = Array(origLines.length + 1).fill(null).map(() => Array(optLines.length + 1).fill(0));
+  
+  for (let i = 1; i <= origLines.length; i++) {
+    for (let j = 1; j <= optLines.length; j++) {
+      if (origLines[i - 1].trim() === optLines[j - 1].trim()) {
+        dp[i][j] = dp[i - 1][j - 1] + 1;
+      } else {
+        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+      }
+    }
+  }
+  
+  const diff = [];
+  let i = origLines.length;
+  let j = optLines.length;
+  
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && origLines[i - 1].trim() === optLines[j - 1].trim()) {
+      diff.unshift({ type: 'unchanged', origText: origLines[i - 1], optText: optLines[j - 1] });
+      i--;
+      j--;
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      diff.unshift({ type: 'added', text: optLines[j - 1] });
+      j--;
+    } else {
+      diff.unshift({ type: 'removed', text: origLines[i - 1] });
+      i--;
+    }
+  }
+  return diff;
+}
+
+// Prettify query formatting tool
+function prettifyQuery(query) {
+  if (!query) return '';
+  
+  const keywords = [
+    'select', 'from', 'where', 'on rows', 'on columns', 'crossjoin',
+    'descendants', 'filter', 'nonempty', 'members', 'properties',
+    'self', 'self_and_before', 'self_and_after', 'currentmember',
+    'children', 'and', 'or', 'not', 'aggregate'
+  ];
+  
+  let formatted = query;
+  
+  keywords.forEach(kw => {
+    const regex = new RegExp('\\b' + kw + '\\b', 'gi');
+    formatted = formatted.replace(regex, kw.toUpperCase());
+  });
+  
+  // Make sure SELECT, FROM, WHERE start on new lines
+  formatted = formatted.replace(/\s*\b(SELECT|FROM|WHERE)\b\s*/g, '\n$1 ');
+  
+  // Clean up extra spacing
+  formatted = formatted.split('\n')
+    .map(line => line.trim())
+    .filter(line => line !== '')
+    .join('\n');
+    
+  let lines = formatted.split('\n');
+  let indentLevel = 0;
+  const indentSize = 2;
+  
+  lines = lines.map(line => {
+    const openCount = (line.match(/\(/g) || []).length;
+    const closeCount = (line.match(/\)/g) || []).length;
+    
+    let currentIndent = indentLevel;
+    
+    if (line.startsWith(')') || line.startsWith('}') || line.startsWith(']')) {
+      currentIndent = Math.max(0, indentLevel - 1);
+    }
+    
+    indentLevel = Math.max(0, indentLevel + openCount - closeCount);
+    
+    return ' '.repeat(currentIndent * indentSize) + line;
+  });
+  
+  return lines.join('\n').trim();
+}
+
 // Custom Query Parser Engine
 function parseCustomQuery(query) {
   if (!query || query.trim() === '') {
@@ -303,6 +389,7 @@ export default function QueryProfiler() {
   const [customResults, setCustomResults] = useState(null);
   const [isCustomValidating, setIsCustomValidating] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
+  const [diffMode, setDiffMode] = useState('side_by_side'); // 'side_by_side' or 'unified'
 
   const activeQuery = SAMPLE_QUERIES.find(q => q.id === selectedId);
 
@@ -691,7 +778,24 @@ export default function QueryProfiler() {
                 />
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 14 }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    const prettified = prettifyQuery(customInput);
+                    setCustomInput(prettified);
+                  }}
+                  style={{
+                    padding: '8px 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    fontSize: '0.82rem'
+                  }}
+                >
+                  <Code2 size={13} /> Prettify Script
+                </button>
                 <button
                   className="btn btn-primary"
                   onClick={handleCustomValidate}
@@ -832,42 +936,220 @@ export default function QueryProfiler() {
                     )}
                   </div>
 
-                  {/* Optimized Suggestion Code */}
-                  {customResults.issues.length > 0 && (
-                    <div className="card" style={{ padding: 20, border: '1px solid var(--border-subtle)' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                        <h4 style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--accent-emerald)', margin: 0 }}>
-                          ✓ Optimized Suggestion
-                        </h4>
-                        <button
-                          onClick={copyCustomOptimized}
-                          style={{
-                            background: copiedCode ? 'var(--accent-emerald-light)' : 'transparent',
-                            border: '1px solid var(--border-subtle)',
-                            borderRadius: 4,
-                            padding: '4px 10px',
-                            fontSize: '0.72rem',
-                            color: copiedCode ? 'var(--accent-emerald)' : 'var(--text-secondary)',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 4
-                          }}
-                        >
-                          {copiedCode ? <Check size={12} /> : <Copy size={12} />}
-                          {copiedCode ? 'Copied!' : 'Copy Code'}
-                        </button>
-                      </div>
-                      <div className="profiler-code-panel" style={{ height: 160, background: 'var(--bg-secondary)' }}>
-                        {customResults.optimized.split('\n').map((line, i) => (
-                          <div key={i} className="profiler-code-line diff-line-added">
-                            <span className="profiler-line-num">{i + 1}</span>
-                            <span className="profiler-line-content" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>{line}</span>
+                  {/* Optimized Suggestion Code & Diff Viewer */}
+                  {customResults.issues.length > 0 && (() => {
+                    const diffItems = computeLineDiff(customInput, customResults.optimized);
+                    
+                    let leftLineNum = 1;
+                    let rightLineNum = 1;
+
+                    const sideBySideRows = diffItems.map((item) => {
+                      const isUnchanged = item.type === 'unchanged';
+                      const isRemoved = item.type === 'removed';
+                      const isAdded = item.type === 'added';
+                      
+                      const currLeftNum = isAdded ? '' : leftLineNum++;
+                      const currRightNum = isRemoved ? '' : rightLineNum++;
+                      
+                      return {
+                        left: {
+                          num: currLeftNum,
+                          text: isAdded ? '' : (isUnchanged ? item.origText : item.text),
+                          type: isAdded ? 'placeholder' : (isUnchanged ? 'normal' : 'removed')
+                        },
+                        right: {
+                          num: currRightNum,
+                          text: isRemoved ? '' : (isUnchanged ? item.optText : item.text),
+                          type: isRemoved ? 'placeholder' : (isUnchanged ? 'normal' : 'added')
+                        }
+                      };
+                    });
+
+                    let uLeftNum = 1;
+                    let uRightNum = 1;
+
+                    return (
+                      <div className="card" style={{ padding: 20, border: '1px solid var(--border-subtle)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+                          <h4 style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--accent-emerald)', margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            ✓ Visual Code Comparison
+                          </h4>
+                          
+                          {/* Diff Mode Toggle Buttons */}
+                          <div style={{ display: 'flex', gap: 4, background: 'var(--bg-input)', padding: 2, borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
+                            <button
+                              type="button"
+                              onClick={() => setDiffMode('side_by_side')}
+                              style={{
+                                padding: '4px 10px',
+                                fontSize: '0.68rem',
+                                border: 'none',
+                                background: diffMode === 'side_by_side' ? 'var(--bg-card)' : 'transparent',
+                                color: diffMode === 'side_by_side' ? 'var(--accent-blue)' : 'var(--text-muted)',
+                                borderRadius: 4,
+                                fontWeight: 600,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              Side-by-Side
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDiffMode('unified')}
+                              style={{
+                                padding: '4px 10px',
+                                fontSize: '0.68rem',
+                                border: 'none',
+                                background: diffMode === 'unified' ? 'var(--bg-card)' : 'transparent',
+                                color: diffMode === 'unified' ? 'var(--accent-blue)' : 'var(--text-muted)',
+                                borderRadius: 4,
+                                fontWeight: 600,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              Unified
+                            </button>
                           </div>
-                        ))}
+
+                          <button
+                            onClick={copyCustomOptimized}
+                            style={{
+                              background: copiedCode ? 'var(--accent-emerald-light)' : 'transparent',
+                              border: '1px solid var(--border-subtle)',
+                              borderRadius: 4,
+                              padding: '4px 10px',
+                              fontSize: '0.72rem',
+                              color: copiedCode ? 'var(--accent-emerald)' : 'var(--text-secondary)',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4
+                            }}
+                          >
+                            {copiedCode ? <Check size={12} /> : <Copy size={12} />}
+                            {copiedCode ? 'Copied Optimized!' : 'Copy Code'}
+                          </button>
+                        </div>
+
+                        {/* Diff Render Block */}
+                        {diffMode === 'side_by_side' ? (
+                          <div style={{ 
+                            display: 'grid', 
+                            gridTemplateColumns: '1fr 1fr', 
+                            gap: '4px', 
+                            overflowX: 'auto', 
+                            background: 'var(--bg-secondary)', 
+                            border: '1px solid var(--border-subtle)', 
+                            borderRadius: 'var(--radius-sm)',
+                            fontFamily: 'var(--font-mono)',
+                            minWidth: '400px'
+                          }}>
+                            {/* Left Side (Original) */}
+                            <div style={{ borderRight: '1.5px solid var(--border-subtle)', padding: '8px 0', minWidth: '200px' }}>
+                              <div style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', padding: '0 10px 4px', borderBottom: '1px solid var(--border-subtle)', marginBottom: '6px' }}>
+                                Original Query
+                              </div>
+                              {sideBySideRows.map((row, idx) => {
+                                const isPlaceholder = row.left.type === 'placeholder';
+                                const isRemoved = row.left.type === 'removed';
+                                return (
+                                  <div key={idx} style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: '28px 1fr',
+                                    alignItems: 'center',
+                                    minHeight: '20px',
+                                    fontSize: '0.75rem',
+                                    background: isRemoved ? 'rgba(239, 68, 68, 0.08)' : isPlaceholder ? 'rgba(0,0,0,0.02)' : 'transparent',
+                                    color: isRemoved ? '#b91c1c' : 'var(--text-secondary)',
+                                    lineHeight: '1.5'
+                                  }}>
+                                    <span style={{ color: isRemoved ? '#fca5a5' : 'var(--text-muted)', textAlign: 'right', paddingRight: '6px', userSelect: 'none', fontSize: '0.65rem' }}>
+                                      {row.left.num}
+                                    </span>
+                                    <span style={{ paddingLeft: '6px', whiteSpace: 'pre', fontFamily: 'var(--font-mono)' }}>
+                                      {isPlaceholder ? ' ' : row.left.text}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            
+                            {/* Right Side (Optimized) */}
+                            <div style={{ padding: '8px 0', minWidth: '200px' }}>
+                              <div style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--accent-emerald)', textTransform: 'uppercase', padding: '0 10px 4px', borderBottom: '1px solid var(--border-subtle)', marginBottom: '6px' }}>
+                                Optimized Suggestion
+                              </div>
+                              {sideBySideRows.map((row, idx) => {
+                                const isPlaceholder = row.right.type === 'placeholder';
+                                const isAdded = row.right.type === 'added';
+                                return (
+                                  <div key={idx} style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: '28px 1fr',
+                                    alignItems: 'center',
+                                    minHeight: '20px',
+                                    fontSize: '0.75rem',
+                                    background: isAdded ? 'rgba(16, 185, 129, 0.08)' : isPlaceholder ? 'rgba(0,0,0,0.02)' : 'transparent',
+                                    color: isAdded ? '#15803d' : 'var(--text-secondary)',
+                                    lineHeight: '1.5'
+                                  }}>
+                                    <span style={{ color: isAdded ? '#6ee7b7' : 'var(--text-muted)', textAlign: 'right', paddingRight: '6px', userSelect: 'none', fontSize: '0.65rem' }}>
+                                      {row.right.num}
+                                    </span>
+                                    <span style={{ paddingLeft: '6px', whiteSpace: 'pre', fontFamily: 'var(--font-mono)' }}>
+                                      {isPlaceholder ? ' ' : row.right.text}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : (
+                          /* Unified Diff View */
+                          <div style={{ 
+                            background: 'var(--bg-secondary)', 
+                            border: '1px solid var(--border-subtle)', 
+                            borderRadius: 'var(--radius-sm)',
+                            padding: '8px 0',
+                            overflowX: 'auto',
+                            fontFamily: 'var(--font-mono)',
+                            minWidth: '400px'
+                          }}>
+                            <div style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', padding: '0 12px 6px', borderBottom: '1px solid var(--border-subtle)', marginBottom: '8px' }}>
+                              Unified View (- Original, + Optimized)
+                            </div>
+                            {diffItems.map((item, idx) => {
+                              if (item.type === 'unchanged') {
+                                return (
+                                  <div key={idx} style={{ display: 'grid', gridTemplateColumns: '32px 32px 1fr', alignItems: 'center', minHeight: '20px', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                    <span style={{ color: 'var(--text-muted)', textAlign: 'right', paddingRight: '8px', userSelect: 'none', fontSize: '0.65rem' }}>{uLeftNum++}</span>
+                                    <span style={{ color: 'var(--text-muted)', textAlign: 'right', paddingRight: '8px', userSelect: 'none', fontSize: '0.65rem' }}>{uRightNum++}</span>
+                                    <span style={{ paddingLeft: '8px', whiteSpace: 'pre', fontFamily: 'var(--font-mono)' }}>  {item.optText}</span>
+                                  </div>
+                                );
+                              } else if (item.type === 'removed') {
+                                return (
+                                  <div key={idx} style={{ display: 'grid', gridTemplateColumns: '32px 32px 1fr', alignItems: 'center', minHeight: '20px', fontSize: '0.75rem', background: 'rgba(239, 68, 68, 0.08)', color: '#b91c1c' }}>
+                                    <span style={{ color: '#fca5a5', textAlign: 'right', paddingRight: '8px', userSelect: 'none', fontSize: '0.65rem' }}>{uLeftNum++}</span>
+                                    <span style={{ color: 'transparent', textAlign: 'right', paddingRight: '8px', userSelect: 'none', fontSize: '0.65rem' }}>-</span>
+                                    <span style={{ paddingLeft: '8px', whiteSpace: 'pre', fontFamily: 'var(--font-mono)', fontWeight: 500 }}>- {item.text}</span>
+                                  </div>
+                                );
+                              } else {
+                                return (
+                                  <div key={idx} style={{ display: 'grid', gridTemplateColumns: '32px 32px 1fr', alignItems: 'center', minHeight: '20px', fontSize: '0.75rem', background: 'rgba(16, 185, 129, 0.08)', color: '#15803d' }}>
+                                    <span style={{ color: 'transparent', textAlign: 'right', paddingRight: '8px', userSelect: 'none', fontSize: '0.65rem' }}>-</span>
+                                    <span style={{ color: '#6ee7b7', textAlign: 'right', paddingRight: '8px', userSelect: 'none', fontSize: '0.65rem' }}>{uRightNum++}</span>
+                                    <span style={{ paddingLeft: '8px', whiteSpace: 'pre', fontFamily: 'var(--font-mono)', fontWeight: 500 }}>+ {item.text}</span>
+                                  </div>
+                                );
+                              }
+                            })}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </motion.div>
               ) : (
                 <motion.div

@@ -5,7 +5,7 @@ import {
   Download, RotateCcw, FileText, BarChart3, Layers, Settings2,
   Sliders, ClipboardList, History, Columns, Trash2, CheckCircle2,
   Play, Save, ArrowLeftRight, Gauge, Shield, Activity, TrendingUp, TrendingDown,
-  Plug, Wifi, WifiOff
+  Plug, Wifi, WifiOff, Printer
 } from 'lucide-react';
 import { REPORT_TYPES, ISSUE_CATEGORIES, POSITIVE_FACTORS, NEGATIVE_FACTORS, analyzeReport } from '../data/optimizationRules';
 import { normalizeExtensionPayload, isValidExtensionMessage } from '../data/extensionBridge';
@@ -18,6 +18,7 @@ import ExecutiveSummary from '../components/ExecutiveSummary';
 import QueryProfiler from '../components/QueryProfiler';
 import PerformanceMetrics from '../components/PerformanceMetrics';
 import UIOptimizationScorecard from '../components/UIOptimizationScorecard';
+import ReportGridSimulator from '../components/ReportGridSimulator';
 
 // ─── Extension Banner Component ───────────────────────────────────────────────
 function ExtensionBanner({ source, onDismiss }) {
@@ -527,6 +528,559 @@ export default function AnalyzerPage() {
       console.warn('Clipboard copy failed', error);
       alert('Unable to copy summary to clipboard.');
     }
+  };
+
+  const handlePrintReport = () => {
+    const activeResults = sandboxMode ? sandboxResults : results;
+    const activeForm = sandboxMode ? sandboxForm : form;
+    if (!activeResults) return;
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Pop-up blocked! Please allow pop-ups for this site to export a printed report.');
+      return;
+    }
+
+    const reportNameStr = activeForm.reportName || 'Weekly Demand Dashboard';
+    const reportTypeLabel = REPORT_TYPES.find(t => t.value === activeForm.reportType)?.label || activeForm.reportType || 'Custom Report';
+    
+    const recommendationsHTML = activeResults.recommendations.map((rec, index) => {
+      const stepsHTML = rec.steps.map(step => `<li>${step}</li>`).join('');
+      const severityClass = `severity-${rec.severity}`;
+      return `
+        <div class="recommendation-card page-break-inside-avoid">
+          <div class="rec-header">
+            <span class="rec-number">#${index + 1}</span>
+            <span class="rec-title">${rec.title}</span>
+            <span class="rec-severity ${severityClass}">${rec.severity.toUpperCase()}</span>
+          </div>
+          <div class="rec-meta">
+            <span><strong>Category:</strong> ${rec.category}</span>
+            <span><strong>Impact:</strong> ${rec.impact}</span>
+            <span><strong>Effort:</strong> ${rec.effortLevel}</span>
+          </div>
+          <div class="rec-body">
+            <p><strong>Problem:</strong> ${rec.problem}</p>
+            <p><strong>Recommendation:</strong> ${rec.recommendation}</p>
+            <div class="rec-steps">
+              <strong>Implementation Steps:</strong>
+              <ol>${stepsHTML}</ol>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    const positiveFactorsHTML = POSITIVE_FACTORS.map(pf => {
+      const active = (activeForm.positiveFactors || []).includes(pf.value);
+      return `<div class="factor-row ${active ? 'active' : 'inactive'}">
+        <span class="factor-check">${active ? '✓' : '✗'}</span>
+        <span class="factor-label">${pf.label}</span>
+        <span class="factor-impact">${pf.impact}%</span>
+      </div>`;
+    }).join('');
+
+    const negativeFactorsHTML = NEGATIVE_FACTORS.map(nf => {
+      const present = (activeForm.negativeFactors || []).includes(nf.value);
+      return `<div class="factor-row ${present ? 'warning' : 'ok'}">
+        <span class="factor-check">${present ? '⚠' : '✓'}</span>
+        <span class="factor-label">${nf.label}</span>
+        <span class="factor-impact">${present ? `+${nf.impact}%` : '0%'}</span>
+      </div>`;
+    }).join('');
+
+    const roadmapRowsHTML = activeResults.recommendations.map((rec, index) => {
+      const status = roadmap[rec.id] || 'todo';
+      const statusLabel = status === 'completed' ? 'Done' : status === 'in_progress' ? 'In Progress' : 'Pending';
+      return `
+        <tr>
+          <td>#${index + 1}</td>
+          <td>${rec.title}</td>
+          <td>${rec.severity.toUpperCase()}</td>
+          <td>${rec.category}</td>
+          <td><span class="status-badge status-${status}">${statusLabel}</span></td>
+        </tr>
+      `;
+    }).join('');
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <title>o9 Optimization Report - ${reportNameStr}</title>
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
+          
+          body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            color: #1e293b;
+            background: #ffffff;
+            line-height: 1.5;
+            margin: 0;
+            padding: 40px;
+          }
+
+          @media print {
+            body {
+              padding: 0;
+            }
+            .no-print {
+              display: none;
+            }
+            .page-break-before {
+              page-break-before: always;
+            }
+            .page-break-inside-avoid {
+              page-break-inside: avoid;
+            }
+          }
+
+          header {
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+          }
+
+          .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+          }
+
+          .logo {
+            font-size: 1.25rem;
+            font-weight: 800;
+            color: #2563eb;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+          }
+
+          .logo-box {
+            width: 30px;
+            height: 30px;
+            background: linear-gradient(135deg, #3b82f6, #6366f1);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            font-size: 0.8rem;
+          }
+
+          h1 {
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: #0f172a;
+            margin: 10px 0 5px 0;
+          }
+
+          .report-meta {
+            font-size: 0.875rem;
+            color: #64748b;
+          }
+
+          .section-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #0f172a;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 8px;
+            margin-top: 40px;
+            margin-bottom: 20px;
+          }
+
+          /* Summary Box */
+          .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+          }
+
+          .summary-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+          }
+
+          .summary-val {
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: #2563eb;
+            font-family: 'JetBrains Mono', monospace;
+          }
+
+          .summary-label {
+            font-size: 0.72rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #64748b;
+            margin-top: 4px;
+            letter-spacing: 0.5px;
+          }
+
+          /* Parameter Details */
+          .params-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+          }
+
+          .params-table th, .params-table td {
+            text-align: left;
+            padding: 10px 12px;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 0.875rem;
+          }
+
+          .params-table th {
+            font-weight: 600;
+            color: #475569;
+            background: #f8fafc;
+          }
+
+          /* Factors Grid */
+          .factors-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 30px;
+          }
+
+          .factor-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 16px;
+          }
+
+          .factor-card h3 {
+            font-size: 0.95rem;
+            font-weight: 700;
+            margin-top: 0;
+            margin-bottom: 12px;
+            color: #334155;
+          }
+
+          .factor-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 0;
+            font-size: 0.8rem;
+            border-bottom: 1px dashed #e2e8f0;
+          }
+
+          .factor-row:last-child {
+            border-bottom: none;
+          }
+
+          .factor-check {
+            font-weight: bold;
+            margin-right: 8px;
+          }
+
+          .factor-row.active .factor-check { color: #10b981; }
+          .factor-row.inactive .factor-check { color: #94a3b8; }
+          .factor-row.warning .factor-check { color: #f43f5e; }
+          .factor-row.ok .factor-check { color: #10b981; }
+
+          .factor-row.active { color: #0f172a; font-weight: 500; }
+          .factor-row.inactive { color: #64748b; }
+          .factor-row.warning { color: #991b1b; font-weight: 500; }
+          .factor-row.ok { color: #64748b; }
+
+          /* Recommendations Card */
+          .recommendation-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            background: #ffffff;
+          }
+
+          .rec-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+          }
+
+          .rec-number {
+            font-weight: 800;
+            font-family: 'JetBrains Mono', monospace;
+            background: #eff6ff;
+            color: #2563eb;
+            width: 28px;
+            height: 28px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            margin-right: 8px;
+          }
+
+          .rec-title {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: #0f172a;
+            flex-grow: 1;
+          }
+
+          .rec-severity {
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 99px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+          }
+
+          .rec-severity.severity-critical { background: #fee2e2; color: #991b1b; }
+          .rec-severity.severity-high { background: #ffe4e6; color: #9f1239; }
+          .rec-severity.severity-medium { background: #fef3c7; color: #92400e; }
+          .rec-severity.severity-low { background: #dcfce7; color: #166534; }
+
+          .rec-meta {
+            display: flex;
+            gap: 20px;
+            font-size: 0.78rem;
+            color: #64748b;
+            background: #f8fafc;
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-bottom: 14px;
+          }
+
+          .rec-body p {
+            margin: 6px 0;
+            font-size: 0.875rem;
+            color: #334155;
+          }
+
+          .rec-steps {
+            margin-top: 14px;
+            border-top: 1px solid #f1f5f9;
+            padding-top: 10px;
+          }
+
+          .rec-steps ol {
+            margin: 6px 0 0 0;
+            padding-left: 20px;
+            font-size: 0.85rem;
+            color: #475569;
+          }
+
+          .rec-steps li {
+            margin-bottom: 4px;
+          }
+
+          /* Roadmap table */
+          .roadmap-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+          }
+
+          .roadmap-table th, .roadmap-table td {
+            text-align: left;
+            padding: 10px 12px;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 0.84rem;
+          }
+
+          .roadmap-table th {
+            font-weight: 600;
+            color: #475569;
+            background: #f8fafc;
+          }
+
+          .status-badge {
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 999px;
+          }
+          .status-badge.status-todo { background: #f1f5f9; color: #475569; }
+          .status-badge.status-in_progress { background: #dbeafe; color: #1d4ed8; }
+          .status-badge.status-completed { background: #dcfce7; color: #15803d; }
+
+          .btn-print {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 12px rgba(37,99,235,0.2);
+            transition: all 0.2s ease;
+          }
+
+          .btn-print:hover {
+            background: #1d4ed8;
+          }
+
+          .print-header-actions {
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: flex-end;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="print-header-actions no-print">
+          <button class="btn-print" onclick="window.print()">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2m-12 0v5h8v-5M6 14h12"></path></svg>
+            Print / Save as PDF
+          </button>
+        </div>
+
+        <header>
+          <div class="header-top">
+            <div>
+              <div class="logo">
+                <div class="logo-box">o9</div>
+                <span>Report Optimization Audit</span>
+              </div>
+              <h1>${reportNameStr}</h1>
+              <div class="report-meta">
+                Type: <strong>${reportTypeLabel}</strong> &bull; Generated: ${new Date().toLocaleString()} &bull; Status: <strong>${sandboxMode ? 'SIMULATED' : 'BASELINE'}</strong>
+              </div>
+            </div>
+            <div class="summary-card" style="min-width: 140px;">
+              <div class="summary-val">${activeResults.score}/100</div>
+              <div class="summary-label">Health Score</div>
+            </div>
+          </div>
+        </header>
+
+        <div class="summary-grid">
+          <div class="summary-card">
+            <div class="summary-val" style="color: ${activeResults.uiPerfScore >= 60 ? '#166534' : activeResults.uiPerfScore >= 40 ? '#92400e' : '#991b1b'}">
+              ${activeResults.uiPerfScore}
+            </div>
+            <div class="summary-label">UI Perf Score</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-val">${activeResults.totalRecommendations}</div>
+            <div class="summary-label">Total Findings</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-val" style="color: #991b1b;">${activeResults.criticalCount}</div>
+            <div class="summary-label">Critical Issues</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-val" style="color: #9f1239;">${activeResults.highCount}</div>
+            <div class="summary-label">High Priority</div>
+          </div>
+        </div>
+
+        <div class="section-title">Report Configuration Parameters</div>
+        <table class="params-table">
+          <thead>
+            <tr>
+              <th>Parameter</th>
+              <th>Value</th>
+              <th>Status / Impact</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Approximate Row Count</td>
+              <td>${(parseInt(activeForm.rowCount) || 0).toLocaleString()} rows</td>
+              <td>${activeForm.rowCount > 100000 ? 'High Volume (Overhead)' : 'Normal'}</td>
+            </tr>
+            <tr>
+              <td>Column Count</td>
+              <td>${activeForm.columnCount || 0} columns</td>
+              <td>${activeForm.columnCount > 30 ? 'Wide Layout (Overhead)' : 'Standard'}</td>
+            </tr>
+            <tr>
+              <td>Number of KPIs</td>
+              <td>${activeForm.kpiCount || 0} KPIs</td>
+              <td>${activeForm.kpiCount > 10 ? 'High Calculation Load' : 'Optimal'}</td>
+            </tr>
+            <tr>
+              <td>Hierarchy Depth</td>
+              <td>${activeForm.hierarchyDepth || 0} levels</td>
+              <td>${activeForm.hierarchyDepth > 6 ? 'Deep Hierarchies (Slow aggregation)' : 'Optimal'}</td>
+            </tr>
+            <tr>
+              <td>Graph Cube Time</td>
+              <td>${activeForm.graphCubeTime ? `${activeForm.graphCubeTime} ms` : 'N/A'}</td>
+              <td>${activeResults.uiPerformance?.graphCubeTier?.label || 'N/A'}</td>
+            </tr>
+            <tr>
+              <td>Web API Time</td>
+              <td>${activeForm.webApiTime ? `${activeForm.webApiTime} ms` : 'N/A'}</td>
+              <td>${activeResults.uiPerformance?.webApiTier?.label || 'N/A'}</td>
+            </tr>
+            <tr>
+              <td>Max Intersection (Tenant Setting)</td>
+              <td>${(parseInt(activeForm.maxIntersection) || 0).toLocaleString()}</td>
+              <td>${activeForm.maxIntersection > 50000 ? 'Sub-optimal query intersection limit' : 'Optimized'}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="section-title">UI Optimization Factors</div>
+        <div class="factors-container">
+          <div class="factor-card">
+            <h3>Positive Factors (Enablements)</h3>
+            ${positiveFactorsHTML}
+          </div>
+          <div class="factor-card">
+            <h3>Negative Factors (Overheads)</h3>
+            ${negativeFactorsHTML}
+          </div>
+        </div>
+
+        <div class="page-break-before"></div>
+
+        <div class="section-title">Roadmap Action Items</div>
+        <table class="roadmap-table">
+          <thead>
+            <tr>
+              <th style="width: 50px;">ID</th>
+              <th>Action Item Title</th>
+              <th style="width: 90px;">Severity</th>
+              <th>Category</th>
+              <th style="width: 120px;">Roadmap Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${roadmapRowsHTML}
+          </tbody>
+        </table>
+
+        <div class="section-title">Detailed Optimization Findings</div>
+        <div class="recommendations-list">
+          ${recommendationsHTML}
+        </div>
+
+        <script>
+          // Auto-trigger print prompt on load
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+            }, 500);
+          }
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
   };
 
   const handleLoadReport = (report) => {
@@ -1235,6 +1789,9 @@ export default function AnalyzerPage() {
               {/* Executive Summary */}
               <ExecutiveSummary results={activeResults} form={sandboxMode ? sandboxForm : form} />
 
+              {/* Report Grid & Performance Simulator */}
+              <ReportGridSimulator form={sandboxMode ? sandboxForm : form} />
+
               {/* Performance Metrics (NEW) */}
               <PerformanceMetrics results={activeResults} form={sandboxMode ? sandboxForm : form} />
 
@@ -1495,6 +2052,9 @@ export default function AnalyzerPage() {
                   </button>
                   <button className="btn btn-secondary btn-sm" onClick={handleCopySummary}>
                     <FileText size={14} /> Copy Summary
+                  </button>
+                  <button className="btn btn-secondary btn-sm" onClick={handlePrintReport}>
+                    <Printer size={14} /> Print Report
                   </button>
                   <button className="btn btn-secondary btn-sm" onClick={handleExport}>
                     <Download size={14} /> Export
