@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Zap, Play, FileCode, CheckCircle, AlertTriangle, ArrowRight,
@@ -393,6 +393,103 @@ export default function QueryProfiler() {
 
   const activeQuery = SAMPLE_QUERIES.find(q => q.id === selectedId);
 
+  const [activePlanNode, setActivePlanNode] = useState('parser');
+  const [planViewMode, setPlanViewMode] = useState('subOptimal');
+
+  const planSteps = useMemo(() => {
+    if (!activeQuery) return [];
+    
+    const isOpt = planViewMode === 'optimized';
+    const qId = activeQuery.id;
+    
+    return [
+      {
+        id: 'parser',
+        name: 'o9 Query Entry Parser',
+        phase: 'parsing',
+        cost: isOpt ? activeQuery.metrics.optimized.parsing : activeQuery.metrics.subOptimal.parsing,
+        status: 'success',
+        shortDesc: 'MDX syntax validation and tokenization.',
+        details: {
+          title: 'o9 Query Entry Parser',
+          engineBehavior: 'The parser reads the raw MDX query characters, resolves dimension catalogs, and tokenizes key keywords like SELECT, ON ROWS, and ON COLUMNS. It constructs an Abstract Syntax Tree (AST) representation of the query.',
+          subOptimalInsight: 'Standard parser overhead. No syntax compilation errors.',
+          optimizedInsight: 'Parser overhead is slightly lower due to a smaller query footprint and clean keyword alignments.'
+        }
+      },
+      {
+        id: 'optimizer',
+        name: 'EKG Schema Optimizer',
+        phase: 'parsing',
+        cost: isOpt ? Math.round(activeQuery.metrics.optimized.parsing * 0.4) : Math.round(activeQuery.metrics.subOptimal.parsing * 0.8),
+        status: qId === 'unindexed-filter' && !isOpt ? 'critical' : 'success',
+        shortDesc: qId === 'unindexed-filter' && !isOpt ? 'Unindexed dynamic property scan.' : 'Index matching and execution path routing.',
+        details: {
+          title: 'EKG Schema Optimizer',
+          engineBehavior: 'Matches query dimensions against EKG schema indices. Determines whether filters can be pushed down directly to physical DB tables or if they require full memory traversals.',
+          subOptimalInsight: qId === 'unindexed-filter' 
+            ? 'CRITICAL: The optimizer detects .Properties("Lead_Time") which is not indexed. This forces a full sequential scan of all member attributes, bypassing index acceleration.'
+            : 'Normal index routing. Graph coordinates resolved successfully.',
+          optimizedInsight: qId === 'unindexed-filter'
+            ? 'OPTIMIZED: The optimizer matches the query to [Sourcing_Lanes].[Lead_Time_Indexed], performing an instantaneous index lookup.'
+            : 'High-speed cache hit on indexed schema references.'
+        }
+      },
+      {
+        id: 'traversal',
+        name: 'Graph Cube Traversal Engine',
+        phase: 'traversal',
+        cost: isOpt ? activeQuery.metrics.optimized.traversal : activeQuery.metrics.subOptimal.traversal,
+        status: qId === 'nested-crossjoin' && !isOpt ? 'critical' : (qId === 'unindexed-filter' && !isOpt ? 'high' : 'success'),
+        shortDesc: qId === 'nested-crossjoin' && !isOpt ? 'Cartesian crossjoin bottleneck (450,000 pairs).' : 'Sourcing lane relationship traversal.',
+        details: {
+          title: 'Graph Cube Traversal Engine',
+          engineBehavior: 'Traverses edges inside the o9 Enterprise Knowledge Graph. Computes sourcing lane relationships from suppliers to locations and products.',
+          subOptimalInsight: qId === 'nested-crossjoin'
+            ? 'CRITICAL: Evaluating a crossjoin across all 8 levels of Product and 6 levels of Location generates 450,000 combinations. The engine is forced to traverse empty intersections.'
+            : qId === 'unindexed-filter'
+              ? 'WARNING: Sequential node-attribute traversal is slow since the filter requires fetching attributes from every node path.'
+              : 'Fast edge-based path traversal.',
+          optimizedInsight: qId === 'nested-crossjoin'
+            ? 'OPTIMIZED: The NONEMPTY constraint limits traversal to active [Active_Sourcing_Edge] links, reducing traversed cells from 450,000 to 12,000.'
+            : 'Traversal restricted to indexed properties, routing complete in sub-50ms.'
+        }
+      },
+      {
+        id: 'solver',
+        name: 'Aggregation Solver',
+        phase: 'aggregation',
+        cost: isOpt ? activeQuery.metrics.optimized.aggregation : activeQuery.metrics.subOptimal.aggregation,
+        status: qId === 'non-additive-accum' && !isOpt ? 'critical' : 'success',
+        shortDesc: qId === 'non-additive-accum' && !isOpt ? 'Recursive margin calculation.' : 'Graph Cube rollup reading.',
+        details: {
+          title: 'Aggregation Solver',
+          engineBehavior: 'Calculates rollups and aggregates measures along the hierarchy structures. Evaluates MDX mathematical expressions.',
+          subOptimalInsight: qId === 'non-additive-accum'
+            ? 'CRITICAL: Query performs dynamic children aggregation on the fly (Revenue * Margin_Pct) for parent members. Recursive calculations scale exponentially with depth.'
+            : 'Standard cell value aggregation.',
+          optimizedInsight: qId === 'non-additive-accum'
+            ? 'OPTIMIZED: Query references [Measures].[Margin_Revenue_Rollup] which is pre-calculated when data is loaded, resolving as a direct memory read.'
+            : 'High cache hit rate for pre-computed Graph Cube aggregates.'
+        }
+      },
+      {
+        id: 'serializer',
+        name: 'Result Serializer',
+        phase: 'serialization',
+        cost: isOpt ? activeQuery.metrics.optimized.serialization : activeQuery.metrics.subOptimal.serialization,
+        status: 'success',
+        shortDesc: 'Encodes data grid cells for frontend rendering.',
+        details: {
+          title: 'Result Serializer',
+          engineBehavior: 'Packs computed MDX multi-dimensional cell arrays into compressed JSON structures optimized for o9 Web UI grid displays.',
+          subOptimalInsight: 'Payload size is large due to unnecessary unconstrained cells.',
+          optimizedInsight: 'Payload size is compressed and serialized instantly.'
+        }
+      }
+    ];
+  }, [activeQuery, planViewMode]);
+
   const handleProfile = () => {
     setIsProfiling(true);
     setShowResults(false);
@@ -499,6 +596,8 @@ export default function QueryProfiler() {
                   onClick={() => {
                     setSelectedId(q.id);
                     setShowResults(false);
+                    setActivePlanNode('parser');
+                    setPlanViewMode('subOptimal');
                   }}
                   style={{
                     padding: '10px 16px',
@@ -674,6 +773,169 @@ export default function QueryProfiler() {
                       })}
                     </div>
                   </div>
+                </div>
+
+                {/* Visual Query Execution Plan Tree */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 20 }}>
+                  
+                  {/* Left Column: Visual Tree */}
+                  <div className="query-plan-container" style={{ margin: 0, alignItems: 'stretch' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, borderBottom: '1px solid var(--border-subtle)', paddingBottom: 10 }}>
+                      <h4 style={{ fontSize: '0.86rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Gauge size={16} color="var(--accent-blue)" /> Execution Plan Tree
+                      </h4>
+                      
+                      {/* Plan Toggle */}
+                      <div style={{ display: 'flex', gap: 4, background: 'var(--bg-input)', padding: 2, borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPlanViewMode('subOptimal');
+                            setActivePlanNode('parser');
+                          }}
+                          style={{
+                            padding: '4px 8px',
+                            fontSize: '0.68rem',
+                            border: 'none',
+                            background: planViewMode === 'subOptimal' ? 'var(--bg-card)' : 'transparent',
+                            color: planViewMode === 'subOptimal' ? 'var(--accent-rose)' : 'var(--text-muted)',
+                            borderRadius: 4,
+                            fontWeight: 600,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Sub-Optimal
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPlanViewMode('optimized');
+                            setActivePlanNode('parser');
+                          }}
+                          style={{
+                            padding: '4px 8px',
+                            fontSize: '0.68rem',
+                            border: 'none',
+                            background: planViewMode === 'optimized' ? 'var(--bg-card)' : 'transparent',
+                            color: planViewMode === 'optimized' ? 'var(--accent-emerald)' : 'var(--text-muted)',
+                            borderRadius: 4,
+                            fontWeight: 600,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Optimized
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="query-plan-nodes-wrapper" style={{ gap: 0 }}>
+                      {planSteps.map((step, idx) => {
+                        const isActive = activePlanNode === step.id;
+                        const isLast = idx === planSteps.length - 1;
+                        
+                        let nodeClass = '';
+                        if (step.status === 'critical') nodeClass = 'severity-critical';
+                        else if (step.status === 'high') nodeClass = 'severity-high';
+                        else if (isActive) nodeClass = 'active';
+
+                        return (
+                          <React.Fragment key={step.id}>
+                            <div
+                              onClick={() => setActivePlanNode(step.id)}
+                              className={`query-plan-node ${nodeClass}`}
+                              style={{
+                                cursor: 'pointer',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'flex-start',
+                                padding: '10px 14px',
+                                minWidth: '100%',
+                                borderLeft: isActive ? '3px solid var(--accent-blue)' : undefined,
+                                outline: isActive && step.status === 'success' ? '1px solid var(--accent-blue)' : undefined
+                              }}
+                            >
+                              <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: '0.78rem', fontWeight: 700 }}>
+                                  {idx + 1}. {step.name}
+                                </span>
+                                <span style={{
+                                  fontSize: '0.68rem',
+                                  fontFamily: 'var(--font-mono)',
+                                  fontWeight: 700,
+                                  color: step.status === 'critical' ? 'var(--accent-rose)' : step.status === 'high' ? 'var(--accent-amber)' : 'var(--text-muted)'
+                                }}>
+                                  {step.cost}ms
+                                </span>
+                              </div>
+                              <span style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', marginTop: 4 }}>
+                                {step.shortDesc}
+                              </span>
+                            </div>
+                            {!isLast && <div className="query-plan-arrow" />}
+                          </React.Fragment>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Right Column: Node Details Inspector Card */}
+                  <div className="card" style={{ padding: 20, border: '1px solid var(--border-subtle)', background: 'var(--bg-glass)', display: 'flex', flexDirection: 'column' }}>
+                    {(() => {
+                      const activeNodeData = planSteps.find(s => s.id === activePlanNode);
+                      if (!activeNodeData) return null;
+
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 12 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', paddingBottom: 8 }}>
+                            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                              Plan Stage Inspector
+                            </span>
+                            <span style={{
+                              fontSize: '0.65rem',
+                              fontWeight: 700,
+                              textTransform: 'uppercase',
+                              padding: '2px 8px',
+                              borderRadius: 999,
+                              background: activeNodeData.status === 'critical' ? '#fef2f2' : activeNodeData.status === 'high' ? '#fffbeb' : 'var(--accent-emerald-light)',
+                              color: activeNodeData.status === 'critical' ? '#ef4444' : activeNodeData.status === 'high' ? '#d97706' : 'var(--accent-emerald)'
+                            }}>
+                              {activeNodeData.status === 'critical' ? 'critical bottleneck' : activeNodeData.status === 'high' ? 'warning' : 'optimal'}
+                            </span>
+                          </div>
+
+                          <h5 style={{ fontSize: '0.88rem', fontWeight: 800, color: 'var(--accent-blue-dark)', margin: 0 }}>
+                            {activeNodeData.details.title}
+                          </h5>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: '0.78rem', lineHeight: 1.5 }}>
+                            <div>
+                              <span style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>o9 Engine Operations:</span>
+                              <p style={{ color: 'var(--text-secondary)', marginTop: 4 }}>
+                                {activeNodeData.details.engineBehavior}
+                              </p>
+                            </div>
+
+                            <div style={{ background: 'var(--bg-input)', padding: 10, borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
+                              <span style={{ fontWeight: 700, color: planViewMode === 'optimized' ? 'var(--accent-emerald)' : 'var(--accent-rose)', display: 'block', marginBottom: 4 }}>
+                                {planViewMode === 'optimized' ? '✓ Optimized Path Insight:' : '✗ Sub-Optimal Cost Analysis:'}
+                              </span>
+                              <p style={{ color: 'var(--text-secondary)', fontSize: '0.74rem' }}>
+                                {planViewMode === 'optimized' ? activeNodeData.details.optimizedInsight : activeNodeData.details.subOptimalInsight}
+                              </p>
+                            </div>
+                            
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', borderTop: '1px dashed var(--border-subtle)', paddingTop: 10 }}>
+                              <span style={{ color: 'var(--text-muted)' }}>Estimated Processing Cost:</span>
+                              <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: activeNodeData.status === 'critical' ? 'var(--accent-rose)' : 'var(--text-primary)' }}>
+                                {activeNodeData.cost}ms
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
                 </div>
 
                 <div className="card" style={{ padding: 24, border: '1px solid var(--border-subtle)' }}>

@@ -1272,3 +1272,135 @@ ul, ol { list-style: none; }
   border-color: var(--border-accent);
 }
 
+/* ===== EKG Sourcing Flow Simulation Styles ===== */
+@keyframes flow-dash {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+.graph-edge-flow {
+  stroke-dasharray: 4, 4;
+  animation: flow-dash 1s linear infinite;
+}
+
+/* Pulse animation for high-utilization bottleneck nodes */
+@keyframes pulse-node-bottleneck {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 2px rgba(239, 68, 68, 0.4));
+  }
+  50% {
+    transform: scale(1.15);
+    filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.8));
+  }
+}
+
+.node-bottleneck-pulse {
+  animation: pulse-node-bottleneck 1.5s ease-in-out infinite;
+}
+
+/* ===== Query Plan Tree Styles ===== */
+.query-plan-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  margin-top: 24px;
+}
+
+.query-plan-nodes-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  width: 100%;
+}
+
+.query-plan-node {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-input);
+  min-width: 320px;
+  max-width: 380px;
+  cursor: pointer;
+  transition: all var(--transition-smooth);
+  box-shadow: var(--shadow-sm);
+  z-index: 2;
+}
+
+.query-plan-node:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--accent-blue);
+}
+
+.query-plan-node.active {
+  border-color: var(--accent-blue);
+  background: var(--accent-blue-light);
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.2);
+}
+
+[data-theme="dark"] .query-plan-node.active {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: var(--accent-blue);
+}
+
+.query-plan-node.severity-critical {
+  border-color: var(--accent-rose);
+  background: var(--accent-rose-light);
+}
+
+[data-theme="dark"] .query-plan-node.severity-critical {
+  background: #3b1515;
+  border-color: var(--accent-rose);
+}
+
+.query-plan-node.severity-high {
+  border-color: var(--accent-amber);
+  background: var(--accent-amber-light);
+}
+
+[data-theme="dark"] .query-plan-node.severity-high {
+  background: #3b2e10;
+  border-color: var(--accent-amber);
+}
+
+.query-plan-node.severity-success {
+  border-color: var(--accent-emerald);
+  background: var(--accent-emerald-light);
+}
+
+[data-theme="dark"] .query-plan-node.severity-success {
+  background: #0d3320;
+  border-color: var(--accent-emerald);
+}
+
+.query-plan-arrow {
+  height: 24px;
+  width: 2px;
+  background: var(--border-subtle);
+  position: relative;
+  z-index: 1;
+}
+
+.query-plan-arrow::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 5px 4px 0 4px;
+  border-style: solid;
+  border-color: var(--border-subtle) transparent transparent transparent;
+}
+

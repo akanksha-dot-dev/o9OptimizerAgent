@@ -2,7 +2,8 @@ import React, { useState, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Layers, AlertTriangle, Info, Eye, CheckCircle2, Plus, Trash2,
-  RefreshCw, FileCode, Check, Copy, Sliders, PlayCircle, Settings, Download
+  RefreshCw, FileCode, Check, Copy, Sliders, PlayCircle, Settings, Download,
+  Play, Pause, Activity
 } from 'lucide-react';
 
 // Archetypes Preset Data
@@ -148,7 +149,117 @@ export default function EKGGraphVisualizer() {
 
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const [selectedEdgeIdx, setSelectedEdgeIdx] = useState(null);
-  const [sidebarTab, setSidebarTab] = useState('diagnostics'); // 'diagnostics', 'details', 'editor'
+  const [sidebarTab, setSidebarTab] = useState('diagnostics'); // 'diagnostics', 'details', 'editor', 'flow'
+
+  // Flow Simulation States
+  const [simulationActive, setSimulationActive] = useState(false);
+  const [supplyPressure, setSupplyPressure] = useState(100); // 50 to 150
+  const [allocationMode, setAllocationMode] = useState('default'); // 'default' or 'balanced'
+
+  // Simulated Flow and Utilization
+  const simulatedFlows = useMemo(() => {
+    if (!simulationActive) return null;
+
+    const pressureMultiplier = supplyPressure / 100;
+    let nodeUtils = {};
+    let edgeFlows = {};
+    
+    if (activeArchetype === 'default') {
+      const nDcSplit = allocationMode === 'balanced' ? 0.5 : 0.75;
+      const sDcSplit = 1 - nDcSplit;
+      
+      nodeUtils['sup-1'] = Math.round(Math.min(99, 65 * pressureMultiplier));
+      nodeUtils['res-1'] = Math.round(Math.min(99, 85 * pressureMultiplier));
+      nodeUtils['plant-1'] = Math.round(Math.min(99, 70 * pressureMultiplier));
+      
+      const nDcUtil = 96 * pressureMultiplier * (nDcSplit / 0.75);
+      nodeUtils['dc-1'] = Math.round(Math.min(99, nDcUtil));
+      
+      const sDcUtil = 38 * pressureMultiplier * (sDcSplit / 0.25);
+      nodeUtils['dc-2'] = Math.round(Math.min(99, sDcUtil));
+      
+      nodeUtils['sku-1'] = Math.round(Math.min(99, 60 * pressureMultiplier));
+      nodeUtils['sku-2'] = Math.round(Math.min(99, 45 * pressureMultiplier));
+      nodeUtils['sku-orphan'] = 0;
+      
+      edgeFlows['sup-1->plant-1'] = 75;
+      edgeFlows['res-1->plant-1'] = 80;
+      edgeFlows['plant-1->dc-1'] = 75 * (nDcSplit / 0.75);
+      edgeFlows['plant-1->dc-2'] = 25 * (sDcSplit / 0.25);
+      edgeFlows['sku-1->dc-1'] = 50;
+      edgeFlows['sku-2->dc-2'] = 50;
+    } else if (activeArchetype === 'automotive') {
+      nodeUtils['sup-steel'] = Math.round(Math.min(99, 70 * pressureMultiplier));
+      nodeUtils['sup-elec'] = Math.round(Math.min(99, 88 * pressureMultiplier));
+      nodeUtils['sup-rubber'] = Math.round(Math.min(99, 60 * pressureMultiplier));
+      
+      nodeUtils['plant-assem'] = Math.round(Math.min(99, 88 * pressureMultiplier));
+      
+      const eastSplit = allocationMode === 'balanced' ? 0.5 : 0.4;
+      const westSplit = 1 - eastSplit;
+      
+      nodeUtils['dc-east'] = Math.round(Math.min(99, 78 * pressureMultiplier * (eastSplit / 0.4)));
+      nodeUtils['dc-west'] = Math.round(Math.min(99, 58 * pressureMultiplier * (westSplit / 0.6)));
+      
+      nodeUtils['sku-carA'] = Math.round(Math.min(99, 80 * pressureMultiplier));
+      nodeUtils['sku-carB'] = Math.round(Math.min(99, 65 * pressureMultiplier));
+      nodeUtils['sku-orphan-part'] = 0;
+      
+      edgeFlows['sup-steel->plant-assem'] = 60;
+      edgeFlows['sup-elec->plant-assem'] = 85;
+      edgeFlows['sup-rubber->plant-assem'] = 50;
+      edgeFlows['plant-assem->dc-east'] = 70 * (eastSplit / 0.4);
+      edgeFlows['plant-assem->dc-west'] = 55 * (westSplit / 0.6);
+      edgeFlows['sku-carA->dc-east'] = 65;
+      edgeFlows['sku-carB->dc-west'] = 65;
+    } else if (activeArchetype === 'semiconductor') {
+      nodeUtils['fab-wafer'] = Math.round(Math.min(99, 90 * pressureMultiplier));
+      nodeUtils['plant-test'] = Math.round(Math.min(99, 85 * pressureMultiplier));
+      
+      const singSplit = allocationMode === 'balanced' ? 0.6 : 0.85;
+      nodeUtils['dc-global'] = Math.round(Math.min(99, 94 * pressureMultiplier * (singSplit / 0.85)));
+      
+      nodeUtils['dist-asia'] = Math.round(Math.min(99, 72 * pressureMultiplier));
+      nodeUtils['dist-amer'] = Math.round(Math.min(99, 68 * pressureMultiplier));
+      nodeUtils['dist-emea'] = Math.round(Math.min(99, 82 * pressureMultiplier));
+      
+      nodeUtils['sku-gpu'] = Math.round(Math.min(99, 95 * pressureMultiplier));
+      nodeUtils['sku-mcu'] = Math.round(Math.min(99, 55 * pressureMultiplier));
+      
+      edgeFlows['fab-wafer->plant-test'] = 80;
+      edgeFlows['plant-test->dc-global'] = 85;
+      edgeFlows['dc-global->dist-asia'] = 75;
+      edgeFlows['dc-global->dist-amer'] = 70;
+      edgeFlows['dc-global->dist-emea'] = 80;
+      edgeFlows['sku-gpu->dc-global'] = 90;
+      edgeFlows['sku-mcu->dc-global'] = 60;
+      edgeFlows['dc-global->fab-wafer'] = 40;
+    } else { // retail
+      nodeUtils['fact-viet'] = Math.round(Math.min(99, 75 * pressureMultiplier));
+      nodeUtils['fact-india'] = Math.round(Math.min(99, 60 * pressureMultiplier));
+      
+      const seaSplit = allocationMode === 'balanced' ? 0.5 : 0.7;
+      const airSplit = 1 - seaSplit;
+      
+      nodeUtils['transit-sea'] = Math.round(Math.min(99, 85 * pressureMultiplier * (seaSplit / 0.7)));
+      nodeUtils['transit-air'] = Math.round(Math.min(99, 45 * pressureMultiplier * (airSplit / 0.3)));
+      
+      nodeUtils['dc-central'] = Math.round(Math.min(99, 80 * pressureMultiplier));
+      nodeUtils['sku-jacket'] = Math.round(Math.min(99, 70 * pressureMultiplier));
+      nodeUtils['sku-shirt'] = Math.round(Math.min(99, 65 * pressureMultiplier));
+      nodeUtils['sku-orphan1'] = 0;
+      nodeUtils['sku-orphan2'] = 0;
+      
+      edgeFlows['fact-viet->transit-sea'] = 70 * (seaSplit / 0.7);
+      edgeFlows['fact-india->transit-air'] = 50 * (airSplit / 0.3);
+      edgeFlows['transit-sea->dc-central'] = 65;
+      edgeFlows['transit-air->dc-central'] = 45;
+      edgeFlows['sku-jacket->dc-central'] = 60;
+      edgeFlows['sku-shirt->dc-central'] = 55;
+    }
+    
+    return { nodeUtils, edgeFlows };
+  }, [simulationActive, supplyPressure, allocationMode, activeArchetype]);
 
   // Node CRUD states
   const [newNodeName, setNewNodeName] = useState('');
@@ -618,6 +729,20 @@ FROM [EKG_Graph_Cube]`;
                     style={{ transition: 'stroke 0.2s ease' }}
                   />
                   
+                  {/* Flow conveyor particles animation overlay */}
+                  {simulationActive && (
+                    <line
+                      x1={fromPt.x}
+                      y1={fromPt.y}
+                      x2={toPt.x}
+                      y2={toPt.y}
+                      className="graph-edge-flow"
+                      stroke={isCycle ? '#f87171' : 'var(--accent-blue)'}
+                      strokeWidth={isSelected ? "1.4" : "1.0"}
+                      style={{ opacity: 0.8 }}
+                    />
+                  )}
+                  
                   {/* Arrow marker replacement */}
                   <circle
                     cx={toPt.x - (toPt.x - fromPt.x) * 0.15}
@@ -636,8 +761,23 @@ FROM [EKG_Graph_Cube]`;
               const isBottleneck = bottlenecks.some(b => b.id === node.id);
 
               let nodeColor = node.color;
-              if (isOrphan) nodeColor = '#ef4444';
-              else if (isBottleneck) nodeColor = '#fbbf24';
+              let isNodeBottleneck = false;
+              let util = 0;
+
+              if (simulationActive && simulatedFlows) {
+                util = simulatedFlows.nodeUtils[node.id] || 0;
+                if (util >= 85) {
+                  nodeColor = '#ef4444';
+                  isNodeBottleneck = true;
+                } else if (util >= 65) {
+                  nodeColor = '#f59e0b';
+                } else {
+                  nodeColor = '#10b981';
+                }
+              } else {
+                if (isOrphan) nodeColor = '#ef4444';
+                else if (isBottleneck) nodeColor = '#fbbf24';
+              }
 
               return (
                 <g
@@ -658,13 +798,13 @@ FROM [EKG_Graph_Cube]`;
                   }}
                 >
                   {/* Outer pulse ripples for warnings */}
-                  {(isOrphan || isBottleneck) && (
+                  {(((isOrphan || isBottleneck) && !simulationActive) || (simulationActive && isNodeBottleneck)) && (
                     <circle
                       cx={node.x}
                       cy={node.y}
                       r="7.5"
                       fill="none"
-                      stroke={isOrphan ? '#f87171' : '#fbbf24'}
+                      stroke={isOrphan || (simulationActive && isNodeBottleneck) ? '#f87171' : '#fbbf24'}
                       strokeWidth="0.6"
                       opacity="0.8"
                       style={{
@@ -678,7 +818,7 @@ FROM [EKG_Graph_Cube]`;
                     cx={node.x}
                     cy={node.y}
                     r={isSelected ? 5.5 : 4.5}
-                    className="graph-node-circle"
+                    className={`graph-node-circle ${isNodeBottleneck ? 'node-bottleneck-pulse' : ''}`}
                     fill={nodeColor}
                     stroke={isSelected ? 'white' : 'transparent'}
                     strokeWidth="0.8"
@@ -713,10 +853,10 @@ FROM [EKG_Graph_Cube]`;
                   </text>
 
                   {/* Warning triangular flag */}
-                  {(isOrphan || isBottleneck) && (
+                  {(((isOrphan || isBottleneck) && !simulationActive) || (simulationActive && isNodeBottleneck)) && (
                     <polygon
                       points={`${node.x + 3.5},${node.y - 3.5} ${node.x + 6},${node.y - 1} ${node.x + 1},${node.y - 1}`}
-                      fill={isOrphan ? '#ef4444' : '#fbbf24'}
+                      fill={isOrphan || (simulationActive && isNodeBottleneck) ? '#ef4444' : '#fbbf24'}
                       stroke="white"
                       strokeWidth="0.3"
                     />
@@ -725,6 +865,7 @@ FROM [EKG_Graph_Cube]`;
               );
             })}
           </svg>
+
 
           {/* SVG Legend overlay */}
           <div style={{ position: 'absolute', bottom: 12, left: 12, background: 'var(--bg-glass)', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)', fontSize: '0.66rem', display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -751,11 +892,11 @@ FROM [EKG_Graph_Cube]`;
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           
           {/* Tab buttons for sidebar */}
-          <div style={{ display: 'flex', background: 'var(--bg-input)', padding: 3, borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
+          <div style={{ display: 'flex', background: 'var(--bg-input)', padding: 3, borderRadius: 6, border: '1px solid var(--border-subtle)', flexWrap: 'wrap', gap: 2 }}>
             <button
               onClick={() => setSidebarTab('diagnostics')}
               style={{
-                flex: 1, padding: '6px 0', fontSize: '0.72rem', fontWeight: 700, borderRadius: 4, border: 'none', cursor: 'pointer',
+                flex: '1 0 45%', padding: '6px 0', fontSize: '0.72rem', fontWeight: 700, borderRadius: 4, border: 'none', cursor: 'pointer',
                 background: sidebarTab === 'diagnostics' ? 'white' : 'transparent',
                 color: sidebarTab === 'diagnostics' ? 'var(--text-primary)' : 'var(--text-muted)'
               }}
@@ -766,7 +907,7 @@ FROM [EKG_Graph_Cube]`;
               onClick={() => setSidebarTab('details')}
               disabled={!selectedNode && !selectedEdge}
               style={{
-                flex: 1, padding: '6px 0', fontSize: '0.72rem', fontWeight: 700, borderRadius: 4, border: 'none',
+                flex: '1 0 45%', padding: '6px 0', fontSize: '0.72rem', fontWeight: 700, borderRadius: 4, border: 'none',
                 cursor: (!selectedNode && !selectedEdge) ? 'not-allowed' : 'pointer',
                 background: sidebarTab === 'details' ? 'white' : 'transparent',
                 color: sidebarTab === 'details' ? 'var(--text-primary)' : 'var(--text-muted)',
@@ -776,14 +917,27 @@ FROM [EKG_Graph_Cube]`;
               Details
             </button>
             <button
+              onClick={() => {
+                setSidebarTab('flow');
+                setSimulationActive(true); // Auto-start simulation when switching to this tab
+              }}
+              style={{
+                flex: '1 0 45%', padding: '6px 0', fontSize: '0.72rem', fontWeight: 700, borderRadius: 4, border: 'none', cursor: 'pointer',
+                background: sidebarTab === 'flow' ? 'white' : 'transparent',
+                color: sidebarTab === 'flow' ? 'var(--text-primary)' : 'var(--text-muted)'
+              }}
+            >
+              Sourcing Flow
+            </button>
+            <button
               onClick={() => setSidebarTab('editor')}
               style={{
-                flex: 1, padding: '6px 0', fontSize: '0.72rem', fontWeight: 700, borderRadius: 4, border: 'none', cursor: 'pointer',
+                flex: '1 0 45%', padding: '6px 0', fontSize: '0.72rem', fontWeight: 700, borderRadius: 4, border: 'none', cursor: 'pointer',
                 background: sidebarTab === 'editor' ? 'white' : 'transparent',
                 color: sidebarTab === 'editor' ? 'var(--text-primary)' : 'var(--text-muted)'
               }}
             >
-              Schema Editor
+              Editor
             </button>
           </div>
 
@@ -1105,6 +1259,174 @@ FROM [EKG_Graph_Cube]`;
                       <Trash2 size={13} />
                       Delete Selected {selectedNodeId ? 'Node' : 'Link'}
                     </button>
+                  )}
+                </motion.div>
+              )}
+
+              {/* TAB 4: Sourcing Flow Simulator */}
+              {sidebarTab === 'flow' && (
+                <motion.div
+                  key="flow"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 14 }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', paddingBottom: 10 }}>
+                    <span style={{ fontSize: '0.82rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Activity size={16} color="var(--accent-blue)" /> Telemetry Controls
+                    </span>
+                    <button
+                      onClick={() => setSimulationActive(prev => !prev)}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: simulationActive ? 'var(--accent-rose)' : 'var(--accent-emerald)',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        fontSize: '0.75rem',
+                        fontWeight: 700
+                      }}
+                    >
+                      {simulationActive ? (
+                        <>
+                          <Pause size={14} /> Stop
+                        </>
+                      ) : (
+                        <>
+                          <Play size={14} /> Run
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {simulationActive ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: 1, overflowY: 'auto' }}>
+                      {/* Supply Pressure Slider */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', fontWeight: 600 }}>
+                          <span style={{ color: 'var(--text-secondary)' }}>Inbound Supply Pressure</span>
+                          <span style={{ color: 'var(--accent-blue)', fontFamily: 'var(--font-mono)' }}>{supplyPressure}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="50"
+                          max="150"
+                          value={supplyPressure}
+                          onChange={(e) => setSupplyPressure(Number(e.target.value))}
+                          style={{ width: '100%', accentColor: 'var(--accent-blue)', cursor: 'pointer' }}
+                        />
+                        <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                          Simulates shifts in market demand and arrival pressure.
+                        </span>
+                      </div>
+
+                      {/* Capacity Utilizations */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--border-subtle)', paddingTop: 10 }}>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+                          Live Node Utilization
+                        </span>
+                        
+                        {/* Render active locations/resources based on archetype */}
+                        {nodes
+                          .filter(n => n.type === 'Location' || n.type === 'Resource' || n.type === 'Supplier')
+                          .map(node => {
+                            const util = simulatedFlows?.nodeUtils[node.id] || 0;
+                            let barColor = 'var(--accent-emerald)';
+                            if (util >= 85) barColor = 'var(--accent-rose)';
+                            else if (util >= 65) barColor = 'var(--accent-amber)';
+
+                            return (
+                              <div key={node.id} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem' }}>
+                                  <span style={{ fontWeight: 600 }}>{node.name}</span>
+                                  <span style={{ fontFamily: 'var(--font-mono)', color: barColor, fontWeight: 700 }}>{util}%</span>
+                                </div>
+                                <div className="progress-bar">
+                                  <div 
+                                    className="progress-bar-fill" 
+                                    style={{ 
+                                      width: `${util}%`, 
+                                      background: barColor,
+                                      transition: 'width 0.3s ease-out' 
+                                    }} 
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+
+                      {/* Warning and Allocation Controller */}
+                      <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 12 }}>
+                        {activeArchetype === 'default' && simulatedFlows?.nodeUtils['dc-1'] >= 85 ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, background: 'rgba(244, 63, 94, 0.05)', border: '1px solid rgba(244, 63, 94, 0.2)', padding: 10, borderRadius: 6 }}>
+                            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--accent-rose)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <AlertTriangle size={14} /> Sourcing Bottleneck Warning
+                            </div>
+                            <p style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                              North DC capacity exceeds threshold (96%). Sourcing splits are set to default (75% North / 25% South).
+                            </p>
+                            <button
+                              onClick={() => setAllocationMode('balanced')}
+                              className="btn btn-primary btn-sm"
+                              style={{ width: '100%', fontSize: '0.72rem', padding: '6px 10px', marginTop: 4 }}
+                            >
+                              Apply Balanced Sourcing (50/50 Split)
+                            </button>
+                          </div>
+                        ) : activeArchetype === 'default' && allocationMode === 'balanced' ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, background: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16, 185, 129, 0.2)', padding: 10, borderRadius: 6 }}>
+                            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--accent-emerald)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <CheckCircle2 size={14} /> Optimization Plan Active
+                            </div>
+                            <p style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                              Sourcing balanced (50% North / 50% South). North DC load dropped to safe level ({simulatedFlows?.nodeUtils['dc-1']}%).
+                            </p>
+                            <button
+                              onClick={() => setAllocationMode('default')}
+                              className="btn btn-secondary btn-sm"
+                              style={{ width: '100%', fontSize: '0.72rem', padding: '6px 10px', marginTop: 4 }}
+                            >
+                              Reset to Default Split
+                            </button>
+                          </div>
+                        ) : (
+                          <div style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', padding: 10, borderRadius: 6, fontSize: '0.7rem', color: 'var(--text-secondary)', textAlign: 'center' }}>
+                            {activeArchetype === 'default' 
+                              ? 'Simulation running normally. Adjust pressure sliders to trigger capacity warnings.'
+                              : 'Simulation active for selected supply chain archetype. Feel free to inspect flows.'
+                            }
+                            {activeArchetype !== 'default' && (
+                              <button
+                                onClick={() => setAllocationMode(prev => prev === 'balanced' ? 'default' : 'balanced')}
+                                className="btn btn-secondary btn-sm"
+                                style={{ width: '100%', fontSize: '0.72rem', padding: '6px 10px', marginTop: 8 }}
+                              >
+                                Toggle Allocation: {allocationMode === 'balanced' ? 'Balanced' : 'Default'}
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', textAlign: 'center', flex: 1 }}>
+                      <PlayCircle size={32} style={{ marginBottom: 8, opacity: 0.5, color: 'var(--accent-blue)' }} />
+                      <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>Simulation Inactive</span>
+                      <p style={{ fontSize: '0.68rem', color: 'var(--text-muted)', maxWidth: 200, marginTop: 4 }}>
+                        Click Run to enable dynamic edge flows and live capacity utilization metrics.
+                      </p>
+                      <button
+                        onClick={() => setSimulationActive(true)}
+                        className="btn btn-primary btn-sm"
+                        style={{ marginTop: 12, padding: '6px 16px' }}
+                      >
+                        Start Simulation
+                      </button>
+                    </div>
                   )}
                 </motion.div>
               )}
