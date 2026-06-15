@@ -1404,3 +1404,82 @@ ul, ol { list-style: none; }
   border-color: var(--border-subtle) transparent transparent transparent;
 }
 
+/* ===== calculation loop animations ===== */
+@keyframes loop-glow-dash {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+.graph-edge-cycle {
+  stroke-dasharray: 5, 3;
+  animation: loop-glow-dash 0.8s linear infinite !important;
+  filter: drop-shadow(0 0 3px #ef4444);
+}
+
+/* ===== Source Code Viewer & Highlights ===== */
+.source-code-viewer-container {
+  display: flex;
+  background: #0f141c;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  min-height: 300px;
+  max-height: 450px;
+}
+
+.source-code-gutter {
+  padding: 12px 8px;
+  background: #171d27;
+  border-right: 1px solid #2d3148;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-family: var(--font-mono);
+  text-align: right;
+  user-select: none;
+  min-width: 40px;
+  line-height: 1.6;
+  overflow-y: hidden;
+}
+
+.source-code-pre {
+  flex: 1;
+  padding: 12px;
+  background: transparent;
+  color: #e2e8f0;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.6;
+  overflow: auto;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.code-highlight {
+  background: rgba(234, 179, 8, 0.4);
+  color: #fef08a;
+  border-radius: 2px;
+  padding: 0 2px;
+  font-weight: 600;
+  box-shadow: 0 0 4px rgba(234, 179, 8, 0.6);
+}
+
+/* ===== Drag & Drop File Upload Zone for view configs ===== */
+.view-config-upload-zone {
+  border: 2px dashed var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  text-align: center;
+  background: var(--bg-input);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 20px;
+}
+
+.view-config-upload-zone:hover,
+.view-config-upload-zone.drag-active {
+  border-color: var(--accent-blue);
+  background: var(--accent-blue-light);
+}
+
+

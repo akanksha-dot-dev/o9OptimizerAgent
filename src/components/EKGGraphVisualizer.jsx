@@ -150,6 +150,8 @@ export default function EKGGraphVisualizer() {
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const [selectedEdgeIdx, setSelectedEdgeIdx] = useState(null);
   const [sidebarTab, setSidebarTab] = useState('diagnostics'); // 'diagnostics', 'details', 'editor', 'flow'
+  const [hoveredCycleIdx, setHoveredCycleIdx] = useState(null);
+  const [showLoopOverlay, setShowLoopOverlay] = useState(true);
 
   // Flow Simulation States
   const [simulationActive, setSimulationActive] = useState(false);
@@ -623,6 +625,20 @@ FROM [EKG_Graph_Cube]`;
           <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: 4 }}>
             Click nodes to inspect attributes and view optimized o9 queries. Build your network or load industry archetypes.
           </p>
+          {cycles.length > 0 && (
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', color: '#ef4444', fontWeight: 700, marginTop: 6, cursor: 'pointer', userSelect: 'none' }}>
+              <input
+                type="checkbox"
+                checked={showLoopOverlay}
+                onChange={e => {
+                  setShowLoopOverlay(e.target.checked);
+                  if (!e.target.checked) setHoveredCycleIdx(null);
+                }}
+                style={{ accentColor: '#ef4444' }}
+              />
+              Highlight critical calculation loops
+            </label>
+          )}
         </div>
 
         {/* Archetype buttons */}
@@ -700,11 +716,25 @@ FROM [EKG_Graph_Cube]`;
               const fromPt = getCoordinates(edge.from);
               const toPt = getCoordinates(edge.to);
               const isSelected = selectedEdgeIdx === idx;
-              const isCycle = isEdgeInCycle(edge);
+              
+              // Find edge cycle mapping
+              const getEdgeCycleIdx = (ed) => {
+                return cycles.findIndex(cycle => {
+                  const fromIdx = cycle.indexOf(ed.from);
+                  const toIdx = cycle.indexOf(ed.to);
+                  if (fromIdx !== -1 && toIdx !== -1) {
+                    return (toIdx === fromIdx + 1) || (fromIdx === cycle.length - 1 && toIdx === 0);
+                  }
+                  return false;
+                });
+              };
+              const cycleIdx = getEdgeCycleIdx(edge);
+              const isCycle = cycleIdx !== -1;
+              const isHoveredCycle = hoveredCycleIdx !== null && hoveredCycleIdx === cycleIdx;
 
               let edgeColor = 'var(--border-subtle, #cbd5e1)';
               if (isSelected) edgeColor = 'var(--accent-blue, #3b82f6)';
-              else if (isCycle) edgeColor = '#ef4444';
+              else if (isCycle && showLoopOverlay) edgeColor = isHoveredCycle ? '#f43f5e' : '#ef4444';
 
               return (
                 <g key={idx} onClick={(e) => handleEdgeClick(idx, e)} style={{ cursor: 'pointer' }}>
@@ -714,19 +744,19 @@ FROM [EKG_Graph_Cube]`;
                     y1={fromPt.y}
                     x2={toPt.x}
                     y2={toPt.y}
-                    stroke={isSelected ? 'rgba(59,130,246,0.15)' : isCycle ? 'rgba(239,68,68,0.1)' : 'transparent'}
-                    strokeWidth={isSelected || isCycle ? "3.0" : "1.0"}
+                    stroke={isSelected ? 'rgba(59,130,246,0.15)' : (isCycle && showLoopOverlay) ? (isHoveredCycle ? 'rgba(244,63,94,0.35)' : 'rgba(239,68,68,0.18)') : 'transparent'}
+                    strokeWidth={isSelected || (isCycle && showLoopOverlay) ? "4.0" : "1.0"}
                   />
                   <line
                     x1={fromPt.x}
                     y1={fromPt.y}
                     x2={toPt.x}
                     y2={toPt.y}
-                    className={isCycle ? 'graph-edge-cycle' : 'graph-edge'}
+                    className={isCycle && showLoopOverlay ? 'graph-edge-cycle' : 'graph-edge'}
                     stroke={edgeColor}
-                    strokeWidth={isSelected ? "1.2" : "0.8"}
-                    strokeDasharray={isCycle ? "2.5,1.5" : undefined}
-                    style={{ transition: 'stroke 0.2s ease' }}
+                    strokeWidth={isSelected ? "1.5" : (isCycle && showLoopOverlay) ? (isHoveredCycle ? "1.4" : "1.0") : "0.8"}
+                    strokeDasharray={isCycle && showLoopOverlay ? "2.5,1.5" : undefined}
+                    style={{ transition: 'stroke 0.2s ease, stroke-width 0.2s ease' }}
                   />
                   
                   {/* Flow conveyor particles animation overlay */}
@@ -763,6 +793,9 @@ FROM [EKG_Graph_Cube]`;
               let nodeColor = node.color;
               let isNodeBottleneck = false;
               let util = 0;
+              
+              const isNodeInCycle = cycles.some(c => c.includes(node.id));
+              const isHoveredCycleNode = hoveredCycleIdx !== null && cycles[hoveredCycleIdx]?.includes(node.id);
 
               if (simulationActive && simulatedFlows) {
                 util = simulatedFlows.nodeUtils[node.id] || 0;
@@ -776,6 +809,7 @@ FROM [EKG_Graph_Cube]`;
                 }
               } else {
                 if (isOrphan) nodeColor = '#ef4444';
+                else if (isNodeInCycle && showLoopOverlay) nodeColor = isHoveredCycleNode ? '#f43f5e' : '#ef4444';
                 else if (isBottleneck) nodeColor = '#fbbf24';
               }
 
@@ -798,14 +832,14 @@ FROM [EKG_Graph_Cube]`;
                   }}
                 >
                   {/* Outer pulse ripples for warnings */}
-                  {(((isOrphan || isBottleneck) && !simulationActive) || (simulationActive && isNodeBottleneck)) && (
+                  {(((isOrphan || isBottleneck || (isNodeInCycle && showLoopOverlay)) && !simulationActive) || (simulationActive && isNodeBottleneck)) && (
                     <circle
                       cx={node.x}
                       cy={node.y}
-                      r="7.5"
+                      r={isHoveredCycleNode ? "9" : "7.5"}
                       fill="none"
-                      stroke={isOrphan || (simulationActive && isNodeBottleneck) ? '#f87171' : '#fbbf24'}
-                      strokeWidth="0.6"
+                      stroke={isOrphan || (simulationActive && isNodeBottleneck) || (isNodeInCycle && showLoopOverlay) ? '#f87171' : '#fbbf24'}
+                      strokeWidth={isHoveredCycleNode ? "0.9" : "0.6"}
                       opacity="0.8"
                       style={{
                         animation: 'pulse-glow 2s ease infinite',
@@ -974,11 +1008,48 @@ FROM [EKG_Graph_Cube]`;
                       </div>
                       <div style={{ color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.4 }}>
                         {cycles.length > 0
-                          ? `Found ${cycles.length} circular references (loops) which risk crashing allocation solvers. Loop nodes: [${cycles[0].join(' → ')}].`
+                          ? `Found ${cycles.length} circular references (loops) which risk crashing allocation solvers.`
                           : 'No circular routes detected in EKG hierarchy mappings.'
                         }
                       </div>
                     </div>
+
+                    {/* Interactive loop list breakdown */}
+                    {cycles.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
+                        <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          Hover to highlight loop path:
+                        </span>
+                        {cycles.map((cycle, cIdx) => {
+                          const nodeNames = cycle.map(nId => nodes.find(n => n.id === nId)?.name || nId);
+                          const isHovered = hoveredCycleIdx === cIdx;
+                          return (
+                            <div
+                              key={cIdx}
+                              onMouseEnter={() => setHoveredCycleIdx(cIdx)}
+                              onMouseLeave={() => setHoveredCycleIdx(null)}
+                              style={{
+                                padding: '8px 10px',
+                                borderRadius: 4,
+                                background: isHovered ? 'rgba(239,68,68,0.08)' : 'var(--bg-input)',
+                                border: `1px solid ${isHovered ? '#ef4444' : 'var(--border-subtle)'}`,
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease',
+                                fontSize: '0.7rem',
+                                color: isHovered ? '#991b1b' : 'var(--text-secondary)'
+                              }}
+                            >
+                              <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <span>⚠️ Cycle #{cIdx + 1} ({cycle.length} nodes)</span>
+                              </div>
+                              <div style={{ marginTop: 4, fontFamily: 'var(--font-mono)', lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={nodeNames.join(' → ') + ' → ' + nodeNames[0]}>
+                                {nodeNames.join(' → ')} → {nodeNames[0]}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
 
                     {/* Orphans indicator */}
                     <div style={{ padding: '8px 12px', borderRadius: 6, background: orphans.length > 0 ? 'rgba(239,68,68,0.04)' : 'rgba(16,185,129,0.04)', border: `1px solid ${orphans.length > 0 ? '#fecaca' : '#a7f3d0'}`, fontSize: '0.75rem' }}>

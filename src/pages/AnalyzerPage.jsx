@@ -5,7 +5,7 @@ import {
   Download, RotateCcw, FileText, BarChart3, Layers, Settings2,
   Sliders, ClipboardList, History, Columns, Trash2, CheckCircle2,
   Play, Save, ArrowLeftRight, Gauge, Shield, Activity, TrendingUp, TrendingDown,
-  Plug, Wifi, WifiOff, Printer
+  Plug, Wifi, WifiOff, Printer, Upload
 } from 'lucide-react';
 import { REPORT_TYPES, ISSUE_CATEGORIES, POSITIVE_FACTORS, NEGATIVE_FACTORS, analyzeReport } from '../data/optimizationRules';
 import { normalizeExtensionPayload, isValidExtensionMessage } from '../data/extensionBridge';
@@ -122,6 +122,289 @@ export default function AnalyzerPage() {
   const [step, setStep] = useState(0);
   const [resultsView, setResultsView] = useState('list');
   const resultsRef = useRef(null);
+
+  const [dragActive, setDragActive] = useState(false);
+  const [uploaderError, setUploaderError] = useState('');
+  const fileInputRef = useRef(null);
+
+  const handleDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      readAndParseViewConfig(files[0]);
+    }
+  };
+
+  const handleZoneClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileSelect = (e) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      readAndParseViewConfig(files[0]);
+    }
+  };
+
+  const parseViewConfigFile = (fileName, fileContent) => {
+    let reportType = 'custom';
+    let rowCount = '';
+    let columnCount = '';
+    let kpiCount = '';
+    let hierarchyDepth = '';
+    let graphCubeTime = '';
+    let webApiTime = '';
+    let maxIntersection = '';
+    let positiveFactors = [];
+    let negativeFactors = [];
+    let issues = [];
+
+    const textLower = fileContent.toLowerCase();
+
+    const combinedText = (fileName + ' ' + fileContent).toLowerCase();
+    if (combinedText.includes('demand') || combinedText.includes('forecast') || combinedText.includes('dmd')) {
+      reportType = 'demand_planning';
+    } else if (combinedText.includes('supply') || combinedText.includes('sourcing') || combinedText.includes('production') || combinedText.includes('constrain')) {
+      reportType = 'supply_planning';
+    } else if (combinedText.includes('inventory') || combinedText.includes('safety_stock') || combinedText.includes('stock') || combinedText.includes('io_')) {
+      reportType = 'inventory';
+    } else if (combinedText.includes('financial') || combinedText.includes('finance') || combinedText.includes('revenue') || combinedText.includes('margin') || combinedText.includes('profit')) {
+      reportType = 'financial';
+    } else if (combinedText.includes('control_tower') || combinedText.includes('control tower') || combinedText.includes('visibility')) {
+      reportType = 'control_tower';
+    } else if (combinedText.includes('scenario') || combinedText.includes('simul') || combinedText.includes('what-if') || combinedText.includes('whatif')) {
+      reportType = 'scenario';
+    } else if (combinedText.includes('exception') || combinedText.includes('alert') || combinedText.includes('issue')) {
+      reportType = 'exception';
+    } else if (combinedText.includes('dashboard') || combinedText.includes('kpi_dashboard')) {
+      reportType = 'kpi_dashboard';
+    } else if (combinedText.includes('snop') || combinedText.includes('s&op')) {
+      reportType = 'snop';
+    }
+
+    let isXml = fileName.endsWith('.xml') || fileContent.trim().startsWith('<');
+    if (isXml) {
+      try {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(fileContent, "text/xml");
+        
+        const getTagValue = (tagName) => {
+          const els = xmlDoc.getElementsByTagName(tagName);
+          return els.length > 0 ? els[0].textContent.trim() : null;
+        };
+        const getAttrValue = (tagName, attrName) => {
+          const els = xmlDoc.getElementsByTagName(tagName);
+          return els.length > 0 ? els[0].getAttribute(attrName) : null;
+        };
+
+        rowCount = getTagValue('RowCount') || getTagValue('Rows') || getAttrValue('Grid', 'rows') || getAttrValue('View', 'rows') || '';
+        columnCount = getTagValue('ColumnCount') || getTagValue('Columns') || getTagValue('Cols') || getAttrValue('Grid', 'cols') || getAttrValue('View', 'cols') || '';
+        
+        const measureTags = xmlDoc.getElementsByTagName('Measure');
+        const kpiTags = xmlDoc.getElementsByTagName('KPI');
+        const kpiVal = getTagValue('KpiCount') || getTagValue('KPIs') || getTagValue('Measures');
+        if (kpiVal) {
+          kpiCount = kpiVal;
+        } else if (measureTags.length > 0) {
+          kpiCount = measureTags.length;
+        } else if (kpiTags.length > 0) {
+          kpiCount = kpiTags.length;
+        }
+
+        hierarchyDepth = getTagValue('HierarchyDepth') || getTagValue('Depth') || getTagValue('Levels') || getAttrValue('Hierarchy', 'depth') || getAttrValue('Hierarchy', 'levels') || '';
+        graphCubeTime = getTagValue('GraphCubeTime') || getTagValue('ExecutionTime') || getTagValue('QueryTime') || '';
+        webApiTime = getTagValue('WebApiTime') || getTagValue('ApiTime') || getTagValue('RequestTime') || '';
+        maxIntersection = getTagValue('MaxIntersection') || getTagValue('IntersectionLimit') || '';
+      } catch (err) {
+        console.warn("Structural XML parsing failed, falling back to regex", err);
+      }
+    } else {
+      try {
+        const data = JSON.parse(fileContent);
+        
+        const findKeyPath = (obj, key) => {
+          const kLower = key.toLowerCase();
+          if (obj && typeof obj === 'object') {
+            for (const [k, v] of Object.entries(obj)) {
+              if (k.toLowerCase() === kLower) {
+                return v;
+              }
+              if (v && typeof v === 'object') {
+                const res = findKeyPath(v, key);
+                if (res !== undefined) return res;
+              }
+            }
+          }
+          return undefined;
+        };
+
+        rowCount = findKeyPath(data, 'rowCount') || findKeyPath(data, 'rows') || findKeyPath(data, 'totalRows') || '';
+        columnCount = findKeyPath(data, 'columnCount') || findKeyPath(data, 'columns') || findKeyPath(data, 'cols') || '';
+        
+        const measures = findKeyPath(data, 'measures') || findKeyPath(data, 'kpis') || findKeyPath(data, 'kpiList');
+        const kpiVal = findKeyPath(data, 'kpiCount') || findKeyPath(data, 'measureCount');
+        if (kpiVal !== undefined) {
+          kpiCount = kpiVal;
+        } else if (Array.isArray(measures)) {
+          kpiCount = measures.length;
+        }
+
+        hierarchyDepth = findKeyPath(data, 'hierarchyDepth') || findKeyPath(data, 'depth') || findKeyPath(data, 'levels') || '';
+        if (typeof hierarchyDepth === 'object' && Array.isArray(hierarchyDepth)) {
+          hierarchyDepth = hierarchyDepth.length;
+        }
+        
+        graphCubeTime = findKeyPath(data, 'graphCubeTime') || findKeyPath(data, 'executionTime') || findKeyPath(data, 'queryTime') || '';
+        webApiTime = findKeyPath(data, 'webApiTime') || findKeyPath(data, 'apiTime') || findKeyPath(data, 'requestTime') || '';
+        maxIntersection = findKeyPath(data, 'maxIntersection') || findKeyPath(data, 'intersectionLimit') || '';
+      } catch (err) {
+        console.warn("Structural JSON parsing failed, falling back to regex", err);
+      }
+    }
+
+    const regexMatch = (regex) => {
+      const match = textLower.match(regex);
+      return match ? match[1] : '';
+    };
+
+    if (!rowCount) rowCount = regexMatch(/row[_\s]?count\s*[:=]\s*["']?(\d+)["']?/i) || regexMatch(/rows?\s*[:=]\s*["']?(\d+)["']?/i);
+    if (!columnCount) columnCount = regexMatch(/column[_\s]?count\s*[:=]\s*["']?(\d+)["']?/i) || regexMatch(/cols?\s*[:=]\s*["']?(\d+)["']?/i);
+    if (!kpiCount) kpiCount = regexMatch(/kpi[_\s]?count\s*[:=]\s*["']?(\d+)["']?/i) || regexMatch(/kpis?\s*[:=]\s*["']?(\d+)["']?/i) || regexMatch(/measure[_\s]?count\s*[:=]\s*["']?(\d+)["']?/i);
+    if (!hierarchyDepth) hierarchyDepth = regexMatch(/depth\s*[:=]\s*["']?(\d+)["']?/i) || regexMatch(/levels?\s*[:=]\s*["']?(\d+)["']?/i);
+    if (!maxIntersection) maxIntersection = regexMatch(/max[_\s]?intersection\s*[:=]\s*["']?(\d+)["']?/i);
+    if (!graphCubeTime) graphCubeTime = regexMatch(/graph[_\s]?cube[_\s]?(?:time|execution|duration)\s*[:=]\s*["']?(\d+)["']?/i);
+    if (!webApiTime) webApiTime = regexMatch(/web[_\s]?api[_\s]?(?:time|execution|duration)\s*[:=]\s*["']?(\d+)["']?/i);
+
+    if (textLower.includes('namedset') || textLower.includes('named_set') || textLower.includes('named set')) {
+      positiveFactors.push('named_sets_used');
+      positiveFactors.push('namedsets_in_view');
+    }
+    if (textLower.includes('favorite') || textLower.includes('favourite')) {
+      positiveFactors.push('filters_favorites');
+    }
+    if (textLower.includes('reportingmeasure') || textLower.includes('reporting_measure') || textLower.includes('reporting measure')) {
+      positiveFactors.push('reporting_measures_alt');
+    }
+    if (textLower.includes('sequence') || textLower.includes('order')) {
+      positiveFactors.push('measure_sequence_order');
+    }
+    if (maxIntersection && parseInt(maxIntersection) <= 50000) {
+      positiveFactors.push('low_max_intersection');
+    }
+    if (textLower.includes('transient')) {
+      positiveFactors.push('few_transient_measures');
+    }
+    if (textLower.includes('refmodel') || textLower.includes('reference_model') || textLower.includes('referencemodel')) {
+      positiveFactors.push('filter_ref_model_order');
+    }
+    if (textLower.includes('factory')) {
+      positiveFactors.push('factory_settings');
+    }
+    if (textLower.includes('postfilter') || textLower.includes('memberfilter') || textLower.includes('measurefilter') || textLower.includes('post_filter') || textLower.includes('member_filter') || textLower.includes('measure_filter')) {
+      positiveFactors.push('measure_member_post_filter');
+    }
+    if (textLower.includes('chainlink') || textLower.includes('chain_link') || textLower.includes('linkedreport') || textLower.includes('linked_report')) {
+      positiveFactors.push('chain_linked_reports');
+    }
+    if (textLower.includes('hidenull') || textLower.includes('hide_null') || textLower.includes('suppressnull') || textLower.includes('suppress_null')) {
+      positiveFactors.push('hide_null_rows');
+    }
+
+    if (textLower.includes('conditionalformatting') || textLower.includes('conditional_formatting') || textLower.includes('conditional formatting') || textLower.includes('condformat')) {
+      negativeFactors.push('conditional_formatting');
+    }
+    if (textLower.includes('interdependent') || textLower.includes('association') || textLower.includes('cascading')) {
+      negativeFactors.push('interdependent_filters');
+    }
+    if (textLower.includes('subtotal') || textLower.includes('defaultmeasure') || textLower.includes('default_measure')) {
+      negativeFactors.push('nulls_subtotals_defaults');
+    }
+
+    const parsedGcTime = parseInt(graphCubeTime) || 0;
+    const parsedWaTime = parseInt(webApiTime) || 0;
+    const parsedRows = parseInt(rowCount) || 0;
+    const parsedCols = parseInt(columnCount) || 0;
+    const parsedKpis = parseInt(kpiCount) || 0;
+    const parsedDepth = parseInt(hierarchyDepth) || 0;
+
+    if (parsedGcTime > 3000 || parsedWaTime > 5000) {
+      issues.push('slow_load');
+    }
+    if (parsedRows > 100000) {
+      issues.push('data_volume');
+    }
+    if (parsedCols > 30) {
+      issues.push('layout_complex');
+    }
+    if (parsedKpis > 15) {
+      issues.push('too_many_kpis');
+    }
+    if (parsedDepth > 6) {
+      issues.push('hierarchy_deep');
+    }
+    if (negativeFactors.length > 0) {
+      issues.push('calc_heavy');
+    }
+    if (issues.length === 0) {
+      issues.push('slow_load');
+    }
+
+    return {
+      reportType,
+      rowCount: rowCount ? String(rowCount) : '',
+      columnCount: columnCount ? String(columnCount) : '',
+      kpiCount: kpiCount ? String(kpiCount) : '',
+      hierarchyDepth: hierarchyDepth ? String(hierarchyDepth) : '',
+      graphCubeTime: graphCubeTime ? String(graphCubeTime) : '',
+      webApiTime: webApiTime ? String(webApiTime) : '',
+      maxIntersection: maxIntersection ? String(maxIntersection) : '',
+      positiveFactors,
+      negativeFactors,
+      issues
+    };
+  };
+
+  const readAndParseViewConfig = (file) => {
+    setUploaderError('');
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      const text = e.target.result;
+      try {
+        const parsed = parseViewConfigFile(file.name, text);
+        setForm(prev => ({
+          ...prev,
+          ...parsed,
+          reportName: parsed.reportName || file.name
+        }));
+        setStep(1);
+      } catch (err) {
+        console.error(err);
+        setUploaderError(`Failed to parse o9 View Configuration: ${err.message}`);
+      }
+    };
+
+    reader.onerror = () => {
+      setUploaderError('Failed to read file.');
+    };
+
+    reader.readAsText(file);
+  };
   // Extension bridge state
   const [extensionSource, setExtensionSource] = useState(null);
   const [extensionToastVisible, setExtensionToastVisible] = useState(false);
@@ -1405,6 +1688,53 @@ export default function AnalyzerPage() {
                 <motion.div key="step0" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} transition={{ duration: 0.3 }}>
                   <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: 6 }}>Select Your Report Type</h3>
                   <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: 24 }}>Choose the o9 report type to get tailored optimization recommendations.</p>
+
+                  {/* Drag & Drop File Upload Zone */}
+                  <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    onChange={handleFileSelect} 
+                    accept=".json,.xml" 
+                    style={{ display: 'none' }} 
+                  />
+                  <div 
+                    onClick={handleZoneClick}
+                    onDragEnter={handleDrag}
+                    onDragOver={handleDrag}
+                    onDragLeave={handleDrag}
+                    onDrop={handleDrop}
+                    style={{
+                      border: `2px dashed ${dragActive ? 'var(--accent-blue)' : 'var(--border-subtle)'}`,
+                      borderRadius: 'var(--radius-md)',
+                      padding: '24px 20px',
+                      textAlign: 'center',
+                      background: dragActive ? 'var(--accent-blue-light)' : 'var(--bg-input)',
+                      transition: 'all 200ms ease',
+                      marginBottom: 24,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <Upload size={28} style={{ color: dragActive ? 'var(--accent-blue)' : 'var(--text-muted)', marginBottom: 10, marginLeft: 'auto', marginRight: 'auto' }} />
+                    <span style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
+                      Drag and drop your o9 View Config file (.json, .xml) here to auto-fill metrics & factors
+                    </span>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                      Instantly parses column/row/KPI counts, query times, and active settings
+                    </span>
+                  </div>
+
+                  {uploaderError && (
+                    <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-sm)', background: 'var(--accent-rose-light)', border: '1px solid var(--accent-rose)', color: 'var(--accent-rose)', fontSize: '0.78rem', marginBottom: 20 }}>
+                      {uploaderError}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+                    <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
+                    <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Or Configure Manually</span>
+                    <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
+                  </div>
+
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
                     {REPORT_TYPES.map(t => (
                       <div
