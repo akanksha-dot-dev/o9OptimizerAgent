@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   Zap, BarChart3, BookOpen, Settings, Database, Target, Layout, Menu, X,
-  Sun, Moon,
+  Sun, Moon, Command,
 } from 'lucide-react';
 
 const navItems = [
@@ -49,6 +49,8 @@ export default function Navbar() {
   const toggleTheme = () =>
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
 
+  const isMac = typeof navigator !== 'undefined' && /Mac/.test(navigator.platform);
+
   return (
     <nav className={`navbar${scrolled ? ' scrolled' : ''}`}>
       <div className="navbar-inner">
@@ -72,7 +74,21 @@ export default function Navbar() {
           ))}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {/* Command Palette Hint */}
+          <button
+            className="cmd-palette-hint"
+            onClick={() => {
+              window.dispatchEvent(new KeyboardEvent('keydown', {
+                key: 'k', ctrlKey: !isMac, metaKey: isMac, bubbles: true,
+              }));
+            }}
+            title="Quick navigation (Ctrl+K)"
+          >
+            <Command size={12} />
+            <span>K</span>
+          </button>
+
           {/* Theme Toggle */}
           <button
             className="theme-toggle"
