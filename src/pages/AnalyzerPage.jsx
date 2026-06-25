@@ -113,7 +113,14 @@ const defaultForm = {
 };
 
 export default function AnalyzerPage() {
-  const [activeToolTab, setActiveToolTab] = useState('analyzer');
+  const [activeToolTab, setActiveToolTab] = useState(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get('tab') === 'profiler' ? 'profiler' : 'analyzer';
+    } catch {
+      return 'analyzer';
+    }
+  });
   // Wizard & Form States
   const [form, setForm] = useState(defaultForm);
   const [results, setResults] = useState(null);

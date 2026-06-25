@@ -391,6 +391,20 @@ export default function QueryProfiler() {
   const [copiedCode, setCopiedCode] = useState(false);
   const [diffMode, setDiffMode] = useState('side_by_side'); // 'side_by_side' or 'unified'
 
+  // Sync with AI Copilot override query on mount
+  useEffect(() => {
+    try {
+      const override = window.localStorage.getItem('o9_profiler_override_query');
+      if (override) {
+        setCustomInput(override);
+        setActiveMode('custom');
+        window.localStorage.removeItem('o9_profiler_override_query');
+      }
+    } catch (e) {
+      console.warn('Failed to read override query', e);
+    }
+  }, []);
+
   const activeQuery = SAMPLE_QUERIES.find(q => q.id === selectedId);
 
   const [activePlanNode, setActivePlanNode] = useState('parser');
