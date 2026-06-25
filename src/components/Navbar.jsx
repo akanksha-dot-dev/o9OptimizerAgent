@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   Zap, BarChart3, BookOpen, Settings, Database, Target, Layout, Menu, X,
-  Sun, Moon, Command,
+  Sun, Moon, Command, Sparkles,
 } from 'lucide-react';
 
 const navItems = [
@@ -10,6 +10,7 @@ const navItems = [
   { path: '/analyzer', label: 'Analyzer', icon: <BarChart3 size={15} /> },
   { path: '/ekg-health', label: 'EKG Health', icon: <Database size={15} /> },
   { path: '/snop-advisor', label: 'S&OP Advisor', icon: <Target size={15} /> },
+  { path: '/copilot', label: 'Copilot', icon: <Sparkles size={15} /> },
   { path: '/templates', label: 'Templates', icon: <Layout size={15} /> },
   { path: '/knowledge', label: 'Knowledge', icon: <BookOpen size={15} /> },
   { path: '/best-practices', label: 'Practices', icon: <Settings size={15} /> },

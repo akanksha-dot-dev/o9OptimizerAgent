@@ -24,6 +24,11 @@ const features = [
     desc: 'Assess your planning maturity across demand, supply, inventory, finance, and technology with a tailored improvement roadmap.'
   },
   {
+    icon: <Sparkles size={22} />, color: 'blue', link: '/copilot',
+    title: 'AI Copilot & Code Generator',
+    desc: 'Chat with an AI Optimizer consultant, generate commented high-performance MDX scripts, and refactor slow queries side-by-side.'
+  },
+  {
     icon: <Layout size={22} />, color: 'emerald', link: '/templates',
     title: 'Report Templates Gallery',
     desc: '8 pre-built optimized report configs — demand, supply, inventory, S&OP, control tower, financial, and NPI templates.'
@@ -498,6 +503,9 @@ export default function HomePage() {
           <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
             <Link to="/analyzer" className="btn btn-primary">
               <Zap size={18} /> Launch Analyzer
+            </Link>
+            <Link to="/copilot" className="btn btn-secondary">
+              <Sparkles size={18} /> Consult AI Copilot
             </Link>
             <Link to="/snop-advisor" className="btn btn-secondary">
               <Target size={18} /> Assess S&OP Maturity

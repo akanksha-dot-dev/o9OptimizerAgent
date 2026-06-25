@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, Zap, BarChart3, Database, Target, Layout, BookOpen, Settings,
-  ArrowUp, ArrowDown, CornerDownLeft, Command,
+  ArrowUp, ArrowDown, CornerDownLeft, Command, Sparkles,
 } from 'lucide-react';
 
 const COMMANDS = [
@@ -11,6 +11,7 @@ const COMMANDS = [
   { id: 'analyzer',   path: '/analyzer',        label: 'Report Analyzer',    desc: 'Deep-dive report performance analysis',            icon: <BarChart3 size={18} />, group: 'Pages' },
   { id: 'ekg',        path: '/ekg-health',      label: 'EKG Health Checker', desc: 'Audit your Enterprise Knowledge Graph',            icon: <Database size={18} />,  group: 'Pages' },
   { id: 'snop',       path: '/snop-advisor',    label: 'S&OP Advisor',       desc: 'Maturity assessment & what-if sandbox',            icon: <Target size={18} />,    group: 'Pages' },
+  { id: 'copilot',    path: '/copilot',         label: 'AI Copilot & Generator', desc: 'Interactive AI Consultant & MDX Script Generator', icon: <Sparkles size={18} />, group: 'Pages' },
   { id: 'templates',  path: '/templates',       label: 'Templates Gallery',  desc: 'Pre-built optimized report configurations',        icon: <Layout size={18} />,    group: 'Pages' },
   { id: 'knowledge',  path: '/knowledge',       label: 'Knowledge Base',     desc: 'Searchable optimization rules catalog',            icon: <BookOpen size={18} />,  group: 'Pages' },
   { id: 'practices',  path: '/best-practices',  label: 'Best Practices',     desc: 'Curated tips from real-world implementations',     icon: <Settings size={18} />,  group: 'Pages' },
