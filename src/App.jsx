@@ -8,6 +8,7 @@ import BestPracticesPage from './pages/BestPracticesPage';
 import EKGHealthPage from './pages/EKGHealthPage';
 import SNOPAdvisorPage from './pages/SNOPAdvisorPage';
 import TemplatesPage from './pages/TemplatesPage';
+import CopilotPage from './pages/CopilotPage';
 import CommandPalette from './components/CommandPalette';
 import ToastProvider from './components/ToastProvider';
 
@@ -25,6 +26,7 @@ export default function App() {
               <Route path="/ekg-health" element={<EKGHealthPage />} />
               <Route path="/snop-advisor" element={<SNOPAdvisorPage />} />
               <Route path="/templates" element={<TemplatesPage />} />
+              <Route path="/copilot" element={<CopilotPage />} />
               <Route path="/knowledge" element={<KnowledgePage />} />
               <Route path="/best-practices" element={<BestPracticesPage />} />
               <Route path="*" element={<HomePage />} />
@@ -45,6 +47,7 @@ export default function App() {
                 <Link to="/ekg-health">EKG Health</Link>
                 <Link to="/snop-advisor">S&OP Advisor</Link>
                 <Link to="/templates">Templates</Link>
+                <Link to="/copilot">AI Copilot</Link>
               </div>
               <div className="footer-col">
                 <h5>Resources</h5>
